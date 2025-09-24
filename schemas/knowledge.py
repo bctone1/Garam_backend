@@ -17,7 +17,7 @@ class KnowledgeBase(BaseModel):
     status: KnowledgeStatus
     preview: str                  # 짧은 요약문
 
-
+# 업로드는 FastAPI File(...)받고 여기는 메타 데이터만 받음
 class KnowledgeCreate(KnowledgeBase):
     pass
 
