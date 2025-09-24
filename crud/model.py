@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional, List, Dict, Any, Literal
 from sqlalchemy import select, update as sa_update
 from sqlalchemy.orm import Session
-from garam_backend.models.model import Model
+from models.model import Model
 
 OrderBy = Literal["recent", "accuracy", "uptime", "speed", "conversations"]
 

@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from garam_backend.database.session import get_db
-from garam_backend.crud import chat as crud
-from garam_backend.schemas.chat import (
+from database.session import get_db
+from crud import chat as crud
+from schemas.chat import (
     ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse,
     MessageCreate, MessageResponse,
     FeedbackCreate, FeedbackResponse,

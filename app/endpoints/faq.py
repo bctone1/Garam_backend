@@ -5,9 +5,9 @@ from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from garam_backend.database.session import get_db
-from garam_backend.crud import faq as crud
-from garam_backend.schemas.faq import (
+from database.session import get_db
+from crud import faq as crud
+from schemas.faq import (
     FAQCreate,
     FAQUpdate,
     FAQResponse,

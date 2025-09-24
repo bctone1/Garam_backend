@@ -2,7 +2,7 @@ from sqlalchemy import (
     Column, BigInteger, Text, Integer, DateTime, Numeric,
     CheckConstraint, Index, func, text
 )
-from garam_backend.database.base import Base
+from database.base import Base
 
 
 class FAQ(Base):

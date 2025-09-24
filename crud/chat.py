@@ -5,7 +5,7 @@ from typing import Optional, List, Iterable, Literal, Any, Dict, Tuple
 from datetime import datetime
 from sqlalchemy import select, update as sa_update, func
 from sqlalchemy.orm import Session
-from garam_backend.models.chat import ChatSession, Message, Feedback
+from models.chat import ChatSession, Message, Feedback
 
 Role = Literal["user", "bot"]
 Rating = Literal["helpful", "not_helpful"]

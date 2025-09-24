@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from garam_backend.database.session import get_db
-from garam_backend.crud import system as crud
-from garam_backend.schemas.system import (
+from database.session import get_db
+from crud import system as crud
+from schemas.system import (
     SystemSettingCreate, SystemSettingUpdate, SystemSettingResponse,
     QuickCategoryCreate, QuickCategoryUpdate, QuickCategoryResponse,
 )

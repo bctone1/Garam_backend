@@ -5,7 +5,7 @@ from sqlalchemy import (
     func, CheckConstraint, Index
 )
 from sqlalchemy.orm import relationship
-from garam_backend.database.base import Base
+from database.base import Base
 
 
 class Inquiry(Base):

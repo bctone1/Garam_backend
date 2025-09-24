@@ -2,8 +2,8 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-from garam_backend.database.base import Base
-from garam_backend import models
+from database.base import Base
+import models
 
 # Alembic Config 객체
 config = context.config

@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from garam_backend.database.session import get_db
-from garam_backend.crud import knowledge as crud
-from garam_backend.schemas.knowledge import (
+from database.session import get_db
+from crud import knowledge as crud
+from schemas.knowledge import (
     KnowledgeCreate, KnowledgeUpdate, KnowledgeResponse,
     KnowledgePageCreate, KnowledgePageUpdate, KnowledgePageResponse,
     KnowledgeChunkResponse,

@@ -3,7 +3,7 @@
 from typing import Optional, List
 from sqlalchemy import select, update as sa_update, delete as sa_delete
 from sqlalchemy.orm import Session
-from garam_backend.models.admin_user import AdminUser
+from models.admin_user import AdminUser
 
 
 # 기본 조회

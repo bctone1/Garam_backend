@@ -1,5 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
-import garam_backend.core.config as config
+import core.config as config
 import os
 
 Base = declarative_base()

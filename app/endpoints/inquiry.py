@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from garam_backend.database.session import get_db
-from garam_backend.crud import inquiry as crud
-from garam_backend.schemas.inquiry import (
+from database.session import get_db
+from crud import inquiry as crud
+from schemas.inquiry import (
     InquiryCreate,
     InquiryUpdate,
     InquiryResponse,

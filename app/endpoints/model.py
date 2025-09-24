@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from garam_backend.database.session import get_db
-from garam_backend.crud import model as crud
-from garam_backend.schemas.model import ModelCreate, ModelUpdate, ModelResponse
+from database.session import get_db
+from crud import model as crud
+from schemas.model import ModelCreate, ModelUpdate, ModelResponse
 
 router = APIRouter(prefix="/models", tags=["Model"])
 

@@ -1,5 +1,5 @@
 from sqlalchemy import Column, BigInteger, String, DateTime, func, Index
-from garam_backend.database.base import Base
+from database.base import Base
 
 
 class AdminUser(Base):

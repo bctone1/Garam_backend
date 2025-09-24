@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
-from garam_backend.models.system import SystemSetting, QuickCategory
+from models.system import SystemSetting, QuickCategory
 
 
 # =========================

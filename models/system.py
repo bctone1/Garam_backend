@@ -3,7 +3,7 @@ from sqlalchemy import (
     Column, BigInteger, Integer, Text, DateTime, ForeignKey,
     CheckConstraint, Index, func, text)
 from sqlalchemy.orm import relationship
-from garam_backend.database.base import Base
+from database.base import Base
 
 
 class SystemSetting(Base):

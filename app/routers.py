@@ -1,5 +1,5 @@
 from fastapi import APIRouter, FastAPI
-from garam_backend.app.endpoints import admin_user, chat, inquiry, knowledge, faq, model, system
+from app.endpoints import admin_user, chat, inquiry, knowledge, faq, model, system
 
 router = APIRouter()
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional, List, Dict, Any, Literal, Sequence
 from sqlalchemy import select, and_, func
 from sqlalchemy.orm import Session
-from garam_backend.models.knowledge import Knowledge, KnowledgePage, KnowledgeChunk
+from models.knowledge import Knowledge, KnowledgePage, KnowledgeChunk
 
 KStatus = Literal["active", "processing", "error"]
 VectorArray = Sequence[float]

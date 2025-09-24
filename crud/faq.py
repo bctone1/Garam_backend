@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional, List, Literal, Dict, Any
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
-from garam_backend.models.faq import FAQ
+from models.faq import FAQ
 
 OrderBy = Literal["recent", "views", "satisfaction"]
 

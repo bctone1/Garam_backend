@@ -2,9 +2,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from garam_backend.database.session import get_db
-from garam_backend.crud import admin_user as crud
-from garam_backend.schemas.admin_user import (
+from database.session import get_db
+from crud import admin_user as crud
+from schemas.admin_user import (
     AdminUserCreate,
     AdminUserUpdate,
     AdminUserResponse,

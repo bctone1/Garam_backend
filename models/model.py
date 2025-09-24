@@ -5,7 +5,7 @@ from sqlalchemy import (
     CheckConstraint, Index, func, text
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from garam_backend.database.base import Base
+from database.base import Base
 
 class Model(Base):
     __tablename__ = "model"
