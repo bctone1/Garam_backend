@@ -1,17 +1,17 @@
 # FastAPI 라우터
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from database.session import get_db
 from crud import admin_user as crud
-from schemas.admin_user import (
-    AdminUserCreate,
-    AdminUserUpdate,
-    AdminUserResponse,
-)
+from schemas.admin_user import AdminUserCreate, AdminUserUpdate, AdminUserResponse
 
-router = APIRouter(prefix="/admin-users", tags=["AdminUser"])
+router = APIRouter(prefix="/admin_users", tags=["Admin User"])
 
+@router.post("/", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
+def create_user(payload: AdminUserCreate, db: Session = Depends(get_db)):
+    if crud.get_by_email(db, payload.email):
+        raise HTTPException(status_code=409, detail="email already exists")
+    return crud.create(db, payload.dict())
 
 @router.get("/", response_model=list[AdminUserResponse])
 def list_users(
@@ -22,13 +22,6 @@ def list_users(
     db: Session = Depends(get_db),
 ):
     return crud.list_users(db, offset=offset, limit=limit, department=department, q=q)
-
-
-@router.post("/", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
-def create_user(payload: AdminUserCreate, db: Session = Depends(get_db)):
-    if crud.get_by_email(db, payload.email):
-        raise HTTPException(status_code=409, detail="email already exists")
-    return crud.create(db, payload.dict())
 
 
 @router.get("/{user_id}", response_model=AdminUserResponse)

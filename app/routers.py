@@ -12,5 +12,8 @@ router.include_router(model.router)
 router.include_router(system.router)
 
 
-def register_routers(app: FastAPI, prefix: str = "/api") -> None:
-    app.include_router(router, prefix=prefix)
+def register_routers(app: FastAPI) -> None:
+    app.include_router(router)
+
+# def register_routers(app: FastAPI, prefix: str = "/app") -> None:
+#     app.include_router(router, prefix=prefix)

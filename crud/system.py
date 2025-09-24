@@ -10,6 +10,13 @@ from models.system import SystemSetting, QuickCategory
 # =========================
 # SystemSetting
 # =========================
+def create_setting(db: Session, data: Dict[str, Any]) -> SystemSetting:
+    obj = SystemSetting(**data)
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
 def get_setting(db: Session, setting_id: int) -> Optional[SystemSetting]:
     return db.get(SystemSetting, setting_id)
 
@@ -18,6 +25,8 @@ def get_current_setting(db: Session) -> Optional[SystemSetting]:
     # 최신 설정 1건
     stmt = select(SystemSetting).order_by(SystemSetting.updated_at.desc()).limit(1)
     return db.execute(stmt).scalar_one_or_none()
+
+
 
 
 def list_settings(db: Session, *, offset: int = 0, limit: int = 50) -> List[SystemSetting]:
@@ -30,12 +39,7 @@ def list_settings(db: Session, *, offset: int = 0, limit: int = 50) -> List[Syst
     return db.execute(stmt).scalars().all()
 
 
-def create_setting(db: Session, data: Dict[str, Any]) -> SystemSetting:
-    obj = SystemSetting(**data)
-    db.add(obj)
-    db.commit()
-    db.refresh(obj)
-    return obj
+
 
 
 def update_setting(db: Session, setting_id: int, data: Dict[str, Any]) -> Optional[SystemSetting]:

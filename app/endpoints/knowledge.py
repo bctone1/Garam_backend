@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import Optional, List, Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,11 @@ VECTOR_DIM = 1536
 
 
 # ---------- Knowledge ----------
+@router.post("/", response_model=KnowledgeResponse, status_code=status.HTTP_201_CREATED)
+def create_knowledge(db: Session = Depends(get_db), file: UploadFile = File(...)):
+    return crud.create_knowledge(db,file)
+
+
 @router.get("/", response_model=list[KnowledgeResponse])
 def list_knowledge(
     offset: int = Query(0, ge=0),
@@ -29,11 +34,6 @@ def list_knowledge(
     db: Session = Depends(get_db),
 ):
     return crud.list_knowledge(db, offset=offset, limit=limit, status=status, q=q)  # type: ignore[arg-type]
-
-
-@router.post("/", response_model=KnowledgeResponse, status_code=status.HTTP_201_CREATED)
-def create_knowledge(payload: KnowledgeCreate, db: Session = Depends(get_db)):
-    return crud.create_knowledge(db, payload.dict())
 
 
 @router.get("/{knowledge_id}", response_model=KnowledgeResponse)

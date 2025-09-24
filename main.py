@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from garam_backend.app.routers import register_routers
+from app.routers import register_routers
 from core.config import UPLOAD_FOLDER
 import uvicorn
 
@@ -25,8 +25,8 @@ app.add_middleware(
 )
 
 # API routers
-register_routers(app, prefix=os.getenv("API_PREFIX", "/api"))
-
+# register_routers(app, prefix=os.getenv("API_PREFIX", "/app"))
+register_routers(app)
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

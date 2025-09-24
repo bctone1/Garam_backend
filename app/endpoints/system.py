@@ -17,6 +17,10 @@ router = APIRouter(prefix="/system", tags=["System"])
 
 
 # ===== SystemSetting =====
+@router.post("/settings", response_model=SystemSettingResponse, status_code=status.HTTP_201_CREATED)
+def create_setting(payload: SystemSettingCreate, db: Session = Depends(get_db)):
+    return crud.create_setting(db, payload.dict())
+
 @router.get("/settings", response_model=list[SystemSettingResponse])
 def list_settings(
     offset: int = Query(0, ge=0),
@@ -34,9 +38,7 @@ def get_current_setting(db: Session = Depends(get_db)):
     return obj
 
 
-@router.post("/settings", response_model=SystemSettingResponse, status_code=status.HTTP_201_CREATED)
-def create_setting(payload: SystemSettingCreate, db: Session = Depends(get_db)):
-    return crud.create_setting(db, payload.dict())
+
 
 
 @router.get("/settings/{setting_id}", response_model=SystemSettingResponse)

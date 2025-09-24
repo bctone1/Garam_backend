@@ -19,6 +19,10 @@ VECTOR_DIM = 1536
 
 
 # -------- ChatSession --------
+@router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
+def create_session(payload: ChatSessionCreate, db: Session = Depends(get_db)):
+    return crud.create_session(db, payload.dict())
+
 @router.get("/sessions", response_model=list[ChatSessionResponse])
 def list_sessions(
     offset: int = Query(0, ge=0),
@@ -29,11 +33,6 @@ def list_sessions(
     db: Session = Depends(get_db),
 ):
     return crud.list_sessions(db, offset=offset, limit=limit, resolved=resolved, model_id=model_id, q=q)
-
-
-@router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
-def create_session(payload: ChatSessionCreate, db: Session = Depends(get_db)):
-    return crud.create_session(db, payload.dict())
 
 
 @router.get("/sessions/{session_id}", response_model=ChatSessionResponse)
@@ -77,6 +76,20 @@ class MessageCreateIn(MessageCreate):
     # vector_memory가 없으면 0 벡터로 채움(임시 저장용)
     vector_memory: Optional[List[float]] = Field(default=None, description="1536-dim vector")
 
+@router.post("/sessions/{session_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def create_message(session_id: int, payload: MessageCreateIn, db: Session = Depends(get_db)):
+    if not crud.get_session(db, session_id):
+        raise HTTPException(status_code=404, detail="session not found")
+    vec = payload.vector_memory if payload.vector_memory is not None else [0.0] * VECTOR_DIM
+    return crud.create_message(
+        db,
+        session_id=session_id,
+        role=payload.role,            # type: ignore[arg-type]
+        content=payload.content,
+        vector_memory=vec,
+        response_latency_ms=payload.response_latency_ms,
+        extra_data=payload.extra_data,  # type: ignore[arg-type]
+    )
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
 def list_messages(
@@ -92,20 +105,7 @@ def list_messages(
     return crud.list_messages(db, session_id, offset=offset, limit=limit, role=role)  # type: ignore[arg-type]
 
 
-@router.post("/sessions/{session_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-def create_message(session_id: int, payload: MessageCreateIn, db: Session = Depends(get_db)):
-    if not crud.get_session(db, session_id):
-        raise HTTPException(status_code=404, detail="session not found")
-    vec = payload.vector_memory if payload.vector_memory is not None else [0.0] * VECTOR_DIM
-    return crud.create_message(
-        db,
-        session_id=session_id,
-        role=payload.role,            # type: ignore[arg-type]
-        content=payload.content,
-        vector_memory=vec,
-        response_latency_ms=payload.response_latency_ms,
-        extra_data=payload.extra_data,  # type: ignore[arg-type]
-    )
+
 
 
 @router.get("/messages/{message_id}", response_model=MessageResponse)

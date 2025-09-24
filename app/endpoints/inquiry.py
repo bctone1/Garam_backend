@@ -22,7 +22,11 @@ Status = Literal["new", "processing", "on_hold", "completed"]
 Satisfaction = Literal["satisfied", "unsatisfied"]
 
 
-# -------- list / create / get / update / delete --------
+# -------- create / list  / get / update / delete --------
+@router.post("/", response_model=InquiryResponse, status_code=status.HTTP_201_CREATED)
+def create_inquiry(payload: InquiryCreate, db: Session = Depends(get_db)):
+    return crud.create(db, payload.dict(exclude_unset=True))
+
 @router.get("/", response_model=list[InquiryResponse])
 def list_inquiries(
     offset: int = Query(0, ge=0),
@@ -45,10 +49,6 @@ def list_inquiries(
         created_to=created_to,
     )
 
-
-@router.post("/", response_model=InquiryResponse, status_code=status.HTTP_201_CREATED)
-def create_inquiry(payload: InquiryCreate, db: Session = Depends(get_db)):
-    return crud.create(db, payload.dict(exclude_unset=True))
 
 
 @router.get("/{inquiry_id}", response_model=InquiryResponse)

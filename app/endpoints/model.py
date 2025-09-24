@@ -14,6 +14,10 @@ router = APIRouter(prefix="/models", tags=["Model"])
 
 OrderBy = Literal["recent", "accuracy", "uptime", "speed", "conversations"]
 
+@router.post("/", response_model=ModelResponse, status_code=status.HTTP_201_CREATED)
+def create_model(payload: ModelCreate, db: Session = Depends(get_db)):
+    return crud.create(db, payload.dict())
+
 
 @router.get("/active", response_model=ModelResponse)
 def get_active_model(db: Session = Depends(get_db)):
@@ -43,10 +47,6 @@ def list_models(
         order_by=order_by,  # type: ignore[arg-type]
     )
 
-
-@router.post("/", response_model=ModelResponse, status_code=status.HTTP_201_CREATED)
-def create_model(payload: ModelCreate, db: Session = Depends(get_db)):
-    return crud.create(db, payload.dict())
 
 
 @router.get("/{model_id}", response_model=ModelResponse)

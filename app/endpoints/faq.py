@@ -1,5 +1,4 @@
 # FastAPI 라우터
-
 from __future__ import annotations
 from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,16 +6,16 @@ from sqlalchemy.orm import Session
 
 from database.session import get_db
 from crud import faq as crud
-from schemas.faq import (
-    FAQCreate,
-    FAQUpdate,
-    FAQResponse,
-)
+from schemas.faq import FAQCreate, FAQUpdate, FAQResponse
 
 OrderBy = Literal["recent", "views", "satisfaction"]
 
 router = APIRouter(prefix="/faqs", tags=["FAQ"])
 
+
+@router.post("/", response_model=FAQResponse, status_code=status.HTTP_201_CREATED)
+def create_faq(payload: FAQCreate, db: Session = Depends(get_db)):
+    return crud.create(db, payload.dict(exclude_unset=True))
 
 @router.get("/", response_model=list[FAQResponse])
 def list_faqs(
@@ -27,11 +26,6 @@ def list_faqs(
     db: Session = Depends(get_db),
 ):
     return crud.list_faqs(db, offset=offset, limit=limit, q=q, order_by=order_by)  # type: ignore[arg-type]
-
-
-@router.post("/", response_model=FAQResponse, status_code=status.HTTP_201_CREATED)
-def create_faq(payload: FAQCreate, db: Session = Depends(get_db)):
-    return crud.create(db, payload.dict(exclude_unset=True))
 
 
 @router.get("/{faq_id}", response_model=FAQResponse)
@@ -58,7 +52,6 @@ def delete_faq(faq_id: int, db: Session = Depends(get_db)):
 
 
 # ----- extra operations -----
-
 @router.post("/{faq_id}/views", response_model=FAQResponse)
 def increment_views(
     faq_id: int,
