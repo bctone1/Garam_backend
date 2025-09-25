@@ -11,7 +11,7 @@ router = APIRouter(prefix="/admin_users", tags=["Admin User"])
 def create_user(payload: AdminUserCreate, db: Session = Depends(get_db)):
     if crud.get_by_email(db, payload.email):
         raise HTTPException(status_code=409, detail="email already exists")
-    return crud.create(db, payload.dict())
+    return crud.create(db, payload.model_dump())
 
 @router.get("/", response_model=list[AdminUserResponse])
 def list_users(
@@ -34,7 +34,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{user_id}", response_model=AdminUserResponse)
 def update_user(user_id: int, payload: AdminUserUpdate, db: Session = Depends(get_db)):
-    obj = crud.update(db, user_id, payload.dict(exclude_unset=True))
+    obj = crud.update(db, user_id, payload.model_dump(exclude_unset=True))
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
     return obj
