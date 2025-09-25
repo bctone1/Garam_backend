@@ -35,7 +35,7 @@ def list_knowledge(
     return db.execute(stmt).scalars().all()
 
 
-def create_knowledge(db: Session, data: Dict[str, Any]) -> Knowledge:
+def create_knowledge(db: Session, data: dict) -> Knowledge:
     obj = Knowledge(**data)
     db.add(obj)
     db.commit()

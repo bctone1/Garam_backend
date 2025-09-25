@@ -20,10 +20,18 @@ VECTOR_DIM = 1536
 
 
 # ---------- Knowledge ----------
+
 @router.post("/", response_model=KnowledgeResponse, status_code=status.HTTP_201_CREATED)
 def create_knowledge(db: Session = Depends(get_db), file: UploadFile = File(...)):
-    return crud.create_knowledge(db,file)
-
+    data = KnowledgeCreate(
+        original_name=file.filename,
+        type=file.content_type,
+        size=len(file.file.read()),  # 파일 크기 직접 계산
+        status="active",    # 'active' | 'processing' | 'error'
+        preview=""
+    )
+    file.file.seek(0)  # size 측정 후 포인터 원복
+    return crud.create_knowledge(db, data.model_dump())
 
 @router.get("/", response_model=list[KnowledgeResponse])
 def list_knowledge(
@@ -114,7 +122,7 @@ def bulk_create_pages(knowledge_id: int, payload: PagesBulkCreateIn, db: Session
     if not crud.get_knowledge(db, knowledge_id):
         raise HTTPException(status_code=404, detail="knowledge not found")
     # 안전을 위해 knowledge_id 강제 주입
-    items = [{**p.dict(), "knowledge_id": knowledge_id} for p in payload.pages]
+    items = [{**p.model_dump(), "knowledge_id": knowledge_id} for p in payload.pages]
     return crud.bulk_create_pages(db, items)
 
 
