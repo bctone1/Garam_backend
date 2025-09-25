@@ -28,7 +28,7 @@ def upgrade() -> None:
     op.drop_index("idx_qc_setting", table_name="quick_category")
     # 컬럼 제거
     op.drop_column("quick_category", "setting_id")
-
+    op.alter_column("knowledge_page", "image_url", existing_type=sa.Text(), nullable=True)
 
 def downgrade() -> None:
     # 되돌릴 때는 다시 컬럼과 제약 추가

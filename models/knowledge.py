@@ -38,8 +38,8 @@ class KnowledgePage(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     knowledge_id = Column(BigInteger, ForeignKey("knowledge.id", ondelete="CASCADE"), nullable=False)
-    page_no = Column(Integer, nullable=False)                 # 1부터
-    image_url = Column(Text, nullable=False)                  # WebP 권장
+    page_no = Column(Integer, nullable=True)                 # 1부터
+    image_url = Column(Text, nullable=True)                  # WebP 권장
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     knowledge = relationship("Knowledge", backref="pages", passive_deletes=True)

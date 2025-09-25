@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any, Literal, Sequence
 from sqlalchemy import select, and_, func
 from sqlalchemy.orm import Session
 from models.knowledge import Knowledge, KnowledgePage, KnowledgeChunk
-
+from typing import Iterable
 KStatus = Literal["active", "processing", "error"]
 VectorArray = Sequence[float]
 
@@ -108,13 +108,18 @@ def upsert_page(
     return obj
 
 
-def bulk_create_pages(db: Session, pages: List[Dict[str, Any]]) -> List[KnowledgePage]:
-    objs = [KnowledgePage(**p) for p in pages]
+def bulk_create_pages(db, knowledge_id: int, pages: list[dict]) -> int:
+    objs = [
+        KnowledgePage(
+            knowledge_id=knowledge_id,
+            page_no=p["page_no"],
+            image_url=(p.get("image_url") or ""),  # None 방지
+        )
+        for p in pages
+    ]
     db.add_all(objs)
     db.commit()
-    for o in objs:
-        db.refresh(o)
-    return objs
+    return len(objs)
 
 
 def delete_page(db: Session, page_id: int) -> bool:
@@ -178,6 +183,21 @@ def create_chunk(
     db.commit()
     db.refresh(obj)
     return obj
+
+
+def create_knowledge_chunks(db, knowledge_id: int, chunks: list[str], vectors: list[list[float]]):
+    """chunks+vectors 배치를 1부터 인덱싱해 저장"""
+    items = [
+        {
+            "page_id": None,
+            "chunk_index": i,              # 1부터
+            "chunk_text": text,
+            "vector_memory": vec,
+        }
+        for i, (text, vec) in enumerate(zip(chunks, vectors), start=1)
+        if text and vec is not None
+    ]
+    return bulk_upsert_chunks(db, knowledge_id, items)
 
 
 def upsert_chunk(

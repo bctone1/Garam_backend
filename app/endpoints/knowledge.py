@@ -1,8 +1,7 @@
 # FastAPI 라우터
-
 from __future__ import annotations
 from typing import Optional, List, Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File,Form
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -11,8 +10,9 @@ from crud import knowledge as crud
 from schemas.knowledge import (
     KnowledgeCreate, KnowledgeUpdate, KnowledgeResponse,
     KnowledgePageCreate, KnowledgePageUpdate, KnowledgePageResponse,
-    KnowledgeChunkResponse,
-)
+    KnowledgeChunkResponse)
+
+from service.upload_pipeline import UploadPipeline
 
 router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
 KStatus = Literal["active", "processing", "error"]
@@ -54,7 +54,7 @@ def get_knowledge(knowledge_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{knowledge_id}", response_model=KnowledgeResponse)
 def update_knowledge(knowledge_id: int, payload: KnowledgeUpdate, db: Session = Depends(get_db)):
-    obj = crud.update_knowledge(db, knowledge_id, payload.dict(exclude_unset=True))
+    obj = crud.update_knowledge(db, knowledge_id, payload.model_dump(exclude_unset=True))
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
     return obj
@@ -249,3 +249,10 @@ def search_chunks(payload: VectorSearchIn, db: Session = Depends(get_db)):
         knowledge_id=payload.knowledge_id,
         top_k=payload.top_k,
     )
+
+@router.post("/upload", response_model=KnowledgeResponse)
+def upload_knowledge(
+        db: Session = Depends(get_db),
+        file: UploadFile = File(...)):
+    pipeline = UploadPipeline(db, user_id="TSET_USER")    ## 추후에 user_id: str = Depends(get_current_user_id)로 변경
+    return pipeline.run(file)
