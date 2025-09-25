@@ -1,8 +1,6 @@
-# DB 접근 로직
-
 from __future__ import annotations
 from typing import Optional, List, Dict, Any
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from models.system import SystemSetting, QuickCategory
 
@@ -17,16 +15,14 @@ def create_setting(db: Session, data: Dict[str, Any]) -> SystemSetting:
     db.refresh(obj)
     return obj
 
+
 def get_setting(db: Session, setting_id: int) -> Optional[SystemSetting]:
     return db.get(SystemSetting, setting_id)
 
 
 def get_current_setting(db: Session) -> Optional[SystemSetting]:
-    # 최신 설정 1건
     stmt = select(SystemSetting).order_by(SystemSetting.updated_at.desc()).limit(1)
     return db.execute(stmt).scalar_one_or_none()
-
-
 
 
 def list_settings(db: Session, *, offset: int = 0, limit: int = 50) -> List[SystemSetting]:
@@ -37,9 +33,6 @@ def list_settings(db: Session, *, offset: int = 0, limit: int = 50) -> List[Syst
         .limit(min(limit, 100))
     )
     return db.execute(stmt).scalars().all()
-
-
-
 
 
 def update_setting(db: Session, setting_id: int, data: Dict[str, Any]) -> Optional[SystemSetting]:
@@ -58,7 +51,7 @@ def delete_setting(db: Session, setting_id: int) -> bool:
     obj = get_setting(db, setting_id)
     if not obj:
         return False
-    db.delete(obj)  # QuickCategory는 ondelete=CASCADE
+    db.delete(obj)  # QuickCategory는 setting_id 없이 독립 관리됨
     db.commit()
     return True
 
@@ -70,12 +63,9 @@ def get_quick_category(db: Session, qc_id: int) -> Optional[QuickCategory]:
     return db.get(QuickCategory, qc_id)
 
 
-def list_quick_categories(
-    db: Session, setting_id: int, *, offset: int = 0, limit: int = 200
-) -> List[QuickCategory]:
+def list_quick_categories(db: Session, *, offset: int = 0, limit: int = 200) -> List[QuickCategory]:
     stmt = (
         select(QuickCategory)
-        .where(QuickCategory.setting_id == setting_id)
         .order_by(QuickCategory.sort_order.asc(), QuickCategory.created_at.asc())
         .offset(offset)
         .limit(min(limit, 1000))
@@ -113,13 +103,13 @@ def delete_quick_category(db: Session, qc_id: int) -> bool:
 
 
 # 정렬 유틸: 주어진 ID 순서대로 0..N-1 재배치
-def reorder_quick_categories(db: Session, setting_id: int, ordered_ids: List[int]) -> int:
-    rows = list_quick_categories(db, setting_id, offset=0, limit=10_000)
+def reorder_quick_categories(db: Session, ordered_ids: List[int]) -> int:
+    rows = list_quick_categories(db, offset=0, limit=10_000)
     id2obj = {r.id: r for r in rows}
     n = 0
     for idx, qc_id in enumerate(ordered_ids):
         obj = id2obj.get(qc_id)
-        if obj and obj.setting_id == setting_id:
+        if obj:
             obj.sort_order = idx
             db.add(obj)
             n += 1
@@ -128,8 +118,8 @@ def reorder_quick_categories(db: Session, setting_id: int, ordered_ids: List[int
 
 
 # 누락된 항목 순서 보정(현재 sort_order 기준으로 0..N-1 재번호)
-def normalize_quick_category_order(db: Session, setting_id: int) -> int:
-    rows = list_quick_categories(db, setting_id, offset=0, limit=10_000)
+def normalize_quick_category_order(db: Session) -> int:
+    rows = list_quick_categories(db, offset=0, limit=10_000)
     for i, r in enumerate(rows):
         if r.sort_order != i:
             r.sort_order = i
