@@ -16,10 +16,6 @@ def create_setting(db: Session, data: Dict[str, Any]) -> SystemSetting:
     return obj
 
 
-def get_setting(db: Session, setting_id: int) -> Optional[SystemSetting]:
-    return db.get(SystemSetting, setting_id)
-
-
 def get_current_setting(db: Session) -> Optional[SystemSetting]:
     stmt = select(SystemSetting).order_by(SystemSetting.updated_at.desc()).limit(1)
     return db.execute(stmt).scalar_one_or_none()
@@ -35,8 +31,8 @@ def list_settings(db: Session, *, offset: int = 0, limit: int = 50) -> List[Syst
     return db.execute(stmt).scalars().all()
 
 
-def update_setting(db: Session, setting_id: int, data: Dict[str, Any]) -> Optional[SystemSetting]:
-    obj = get_setting(db, setting_id)
+def update_current_setting(db: Session, data: Dict[str, Any]) -> Optional[SystemSetting]:
+    obj = get_current_setting(db)
     if not obj:
         return None
     for k, v in data.items():
@@ -47,11 +43,11 @@ def update_setting(db: Session, setting_id: int, data: Dict[str, Any]) -> Option
     return obj
 
 
-def delete_setting(db: Session, setting_id: int) -> bool:
-    obj = get_setting(db, setting_id)
+def delete_current_setting(db: Session) -> bool:
+    obj = get_current_setting(db)
     if not obj:
         return False
-    db.delete(obj)  # QuickCategory는 setting_id 없이 독립 관리됨
+    db.delete(obj)
     db.commit()
     return True
 
