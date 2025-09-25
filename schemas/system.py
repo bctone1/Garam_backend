@@ -51,7 +51,7 @@ class SystemSettingResponse(SystemSettingBase):
 # ========== QuickCategory ==========
 
 class QuickCategoryBase(BaseModel):
-    setting_id: int
+    # setting_id: int    ## 굳이 참조 안해 도 됨
     icon_emoji: str
     name: str
     description: Optional[str] = None

@@ -75,7 +75,7 @@ class KnowledgeChunk(Base):
             "idx_kchunk_vec_ivfflat",
             "vector_memory",
             postgresql_using="ivfflat",
-            postgresql_with={"lists": 100},
+            postgresql_with={"lists": 100},    # 전체 벡터 100개 클러스터로 나눔 정확도/속도 균형
             postgresql_ops={"vector_memory": "vector_cosine_ops"},
         ),
         # 선택: pg_trgm 설치 시 키워드 보조검색
