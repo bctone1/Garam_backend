@@ -8,6 +8,7 @@ class AdminUserBase(BaseModel):
     name: str
     email: EmailStr
     department: str
+    password:str
 
 # 생성 시 입력
 class AdminUserCreate(AdminUserBase):
