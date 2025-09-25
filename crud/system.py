@@ -21,14 +21,14 @@ def get_current_setting(db: Session) -> Optional[SystemSetting]:
     return db.execute(stmt).scalar_one_or_none()
 
 
-def list_settings(db: Session, *, offset: int = 0, limit: int = 50) -> List[SystemSetting]:
-    stmt = (
-        select(SystemSetting)
-        .order_by(SystemSetting.updated_at.desc())
-        .offset(offset)
-        .limit(min(limit, 100))
-    )
-    return db.execute(stmt).scalars().all()
+# def list_settings(db: Session, *, offset: int = 0, limit: int = 50) -> List[SystemSetting]:
+#     stmt = (
+#         select(SystemSetting)
+#         .order_by(SystemSetting.updated_at.desc())
+#         .offset(offset)
+#         .limit(min(limit, 100))
+#     )
+#     return db.execute(stmt).scalars().all()
 
 
 def update_current_setting(db: Session, data: Dict[str, Any]) -> Optional[SystemSetting]:
