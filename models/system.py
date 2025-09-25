@@ -38,7 +38,7 @@ class QuickCategory(Base):
     __tablename__ = "quick_category"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    setting_id = Column(BigInteger, ForeignKey("system_setting.id", ondelete="CASCADE"), nullable=False)
+    # setting_id = Column(BigInteger, ForeignKey("system_setting.id", ondelete="CASCADE"), nullable=False)
 
     icon_emoji = Column(Text, nullable=False)
     name = Column(Text, nullable=False)
@@ -49,12 +49,11 @@ class QuickCategory(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # 관계
-    setting = relationship("SystemSetting", backref="quick_categories", passive_deletes=True)
+    # setting = relationship("SystemSetting", backref="quick_categories", passive_deletes=True)
 
     __table_args__ = (
         CheckConstraint("sort_order >= 0", name="chk_qc_sort_nonneg"),
-        Index("idx_qc_setting_order", "setting_id", "sort_order"),
-        Index("idx_qc_setting", "setting_id"),
+        Index("idx_qc_order", "sort_order"),  # 필요하면 sort_order 단일 인덱스로 교체
     )
 
 
