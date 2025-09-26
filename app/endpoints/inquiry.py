@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+
 from database.session import get_db
 from crud import inquiry as crud
 from schemas.inquiry import (
@@ -20,6 +21,22 @@ router = APIRouter(prefix="/inquiries", tags=["Inquiry"])
 
 Status = Literal["new", "processing", "on_hold", "completed"]
 Satisfaction = Literal["satisfied", "unsatisfied"]
+
+from crud.inquiry import serialize_inquiry
+from models.inquiry import Inquiry
+from sqlalchemy.orm import Session, joinedload
+
+@router.get("/get_inquiry_list")
+def get_inquiry_list(db: Session = Depends(get_db)):
+    # Inquiry + InquiryHistory 데이터를 한 번의 쿼리로 가져오기
+    inquiries = db.query(Inquiry).options(joinedload(Inquiry.histories)).all()
+
+    # JSON 직렬화
+    result = [serialize_inquiry(i) for i in inquiries]
+
+    return result
+
+
 
 
 # -------- create / list  / get / update / delete --------
