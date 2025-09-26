@@ -1,13 +1,13 @@
 from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-
-from sqlalchemy import select, func, case, literal_column
+from models.chat import ChatSession, Message
+from sqlalchemy import select, func, case, literal_column, cast, Float, and_
 from sqlalchemy.orm import Session
 
-from models.chat import ChatSession, Message
 from models.inquiry import Inquiry
 from models.model import Model
+
 
 
 def _range_filter(col, start: Optional[datetime], end: Optional[datetime]):
@@ -118,32 +118,55 @@ def get_hourly_usage(db: Session, *, days: int = 7) -> List[Dict[str, Any]]:
     return [{"ts": r.ts, "messages": int(r.messages or 0)} for r in rows]
 
 
-def get_model_stats(db: Session, *, limit: int = 10) -> List[Dict[str, Any]]:
-    base = db.execute(
-        select(Model.id, Model.name, Model.provider_name, func.count(ChatSession.id).label("sessions"))
-        .join(ChatSession, ChatSession.model_id == Model.id, isouter=True)
-        .group_by(Model.id)
-        .order_by(literal_column("sessions").desc(), Model.created_at.desc())
+
+def get_model_stats(db: Session, *, limit: int = 10, start: Optional[datetime] = None, end: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    # 기간 필터
+    cs_conds = _range_filter(ChatSession.created_at, start, end)
+    ms_conds = _range_filter(Message.created_at, start, end)
+
+    # 모델별 봇 응답 평균(ms) 서브쿼리
+    resp_agg = (
+        select(
+            ChatSession.model_id.label("mid"),
+            func.avg(cast(Message.response_latency_ms, Float)).label("avg_ms"),
+        )
+        .join(Message, Message.session_id == ChatSession.id)
+        .where(Message.role == "bot", *ms_conds)
+        .group_by(ChatSession.model_id)
+        .subquery()
+    )
+
+    # 세션 수 집계 + 평균 응답 조인
+    sessions_col = func.count(ChatSession.id).label("sessions")
+    q = (
+        select(
+            Model.id,
+            Model.name,
+            Model.provider_name,
+            sessions_col,
+            func.coalesce(resp_agg.c.avg_ms, 0.0).label("avg_response_ms"),
+        )
+        .select_from(Model)
+        .outerjoin(
+            ChatSession,
+            and_(ChatSession.model_id == Model.id, *cs_conds),
+        )
+        .outerjoin(resp_agg, resp_agg.c.mid == Model.id)
+        .group_by(
+            Model.id, Model.name, Model.provider_name, resp_agg.c.avg_ms
+        )
+        .order_by(sessions_col.desc(), Model.id.asc())
         .limit(limit)
-    ).all()
+    )
 
-    resp_map = {
-        mid: float(avg or 0.0)
-        for mid, avg in db.execute(
-            select(ChatSession.model_id.label("mid"), func.avg(Message.response_latency_ms.cast(float)).label("avg_ms"))
-            .join(Message, Message.session_id == ChatSession.id)
-            .where(Message.role == "bot")
-            .group_by(ChatSession.model_id)
-        ).all()
-    }
-
+    rows = db.execute(q).all()
     return [
         {
             "model_id": r.id,
             "model_name": r.name,
             "provider": r.provider_name,
             "sessions": int(r.sessions or 0),
-            "avg_response_ms": round(resp_map.get(r.id, 0.0), 2),
+            "avg_response_ms": round(float(r.avg_response_ms or 0.0), 2),
         }
-        for r in base
+        for r in rows
     ]
