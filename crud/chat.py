@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import Optional, List, Iterable, Literal, Any, Dict, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select, update as sa_update, func
 from sqlalchemy.orm import Session
 from models.chat import ChatSession, Message, Feedback
@@ -60,7 +60,7 @@ def end_session(db: Session, session_id: int, *, resolved: Optional[bool] = None
     obj = get_session(db, session_id)
     if not obj:
         return None
-    obj.ended_at = datetime.utcnow()
+    obj.ended_at = datetime.now(timezone.utc)
     if resolved is not None:
         obj.resolved = resolved
     db.add(obj)

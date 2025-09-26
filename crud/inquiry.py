@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import Optional, List, Dict, Any, Literal
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
 from models.inquiry import Inquiry, InquiryHistory
@@ -119,7 +119,7 @@ def assign(
     if not obj:
         return None
     obj.assignee_admin_id = admin_id
-    obj.assigned_at = datetime.utcnow()
+    obj.assigned_at = datetime.now(timezone.utc)
     obj.status = "processing"
     db.add(obj)
     _add_history(db, inquiry_id, action="assign", admin_id=actor_admin_id, to_admin_id=admin_id)
@@ -149,7 +149,7 @@ def transfer(
     if not obj:
         return None
     obj.assignee_admin_id = to_admin_id
-    obj.assigned_at = datetime.utcnow()
+    obj.assigned_at = datetime.now(timezone.utc)
     db.add(obj)
     _add_history(db, inquiry_id, action="transfer", admin_id=actor_admin_id, to_admin_id=to_admin_id)
     db.commit()
@@ -166,7 +166,7 @@ def set_status(
         return None
     obj.status = status
     if status == "completed" and obj.completed_at is None:
-        obj.completed_at = datetime.utcnow()
+        obj.completed_at = datetime.now(timezone.utc)
     db.add(obj)
     _add_history(db, inquiry_id, action=("complete" if status == "completed" else "note"),
                  admin_id=actor_admin_id, details=details or f"status={status}")

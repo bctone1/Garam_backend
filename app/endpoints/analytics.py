@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -32,7 +32,7 @@ def dashboard_metrics(
         session_resolved_rate=data["session_resolved_rate"],
     )
 
-
+# 일일 문의량
 @router.get("/timeseries/daily", response_model=List[DailyPoint])
 def daily_timeseries(
     # 최근 N일 기준 일별 시계열. 기본 30일, 최대 365일.

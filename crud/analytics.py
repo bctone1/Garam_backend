@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from models.chat import ChatSession, Message
 from sqlalchemy import select, func, case, literal_column, cast, Float, and_
@@ -9,7 +9,8 @@ from models.inquiry import Inquiry
 from models.model import Model
 
 
-
+# start와 end를 구현해주는 유틸
+## where 조건절로 필터를 거는데 start와 end 기간을 잡아줌.
 def _range_filter(col, start: Optional[datetime], end: Optional[datetime]):
     conds = []    ## condition 약자
     if start:
@@ -19,69 +20,130 @@ def _range_filter(col, start: Optional[datetime], end: Optional[datetime]):
     return conds
 
 
-def get_dashboard_metrics(
-    db: Session, *, start: Optional[datetime] = None, end: Optional[datetime] = None
-) -> Dict[str, Any]:
-    # 총 세션
+def get_dashboard_metrics(db, *, start=None, end=None):
+    # 공통 기간 조건
+    cs_cond  = _range_filter(ChatSession.created_at, start, end)
+    msg_cond = _range_filter(Message.created_at, start, end)
+    iqc_cond = _range_filter(Inquiry.created_at, start, end)
+    iqf_cond = _range_filter(Inquiry.completed_at, start, end)
+
     total_sessions = db.scalar(
-        select(func.count()).select_from(ChatSession).where(*_range_filter(ChatSession.created_at, start, end))
+        select(func.count()).select_from(ChatSession).where(*cs_cond)
     ) or 0
 
-    # 평균 응답(ms) - bot 메시지
-    avg_response_ms = float(db.scalar(
-        select(func.avg(Message.response_latency_ms.cast(float)))
-        .where(Message.role == "bot", *_range_filter(Message.created_at, start, end))
-    ) or 0.0)
+    avg_response_ms = db.scalar(
+        select(func.avg(Message.response_latency_ms).cast(Float))
+        .where(Message.role == "bot", *msg_cond)
+    ) or 0.0
 
-    # 문의 해결률
+    # 코호트 일치형 해결률: 기간 내 "생성된" 문의 중 완료 상태 비율
     inq_total = db.scalar(
-        select(func.count()).select_from(Inquiry).where(*_range_filter(Inquiry.created_at, start, end))
+        select(func.count()).select_from(Inquiry).where(*iqc_cond)
     ) or 0
-    inq_completed = db.scalar(
-        select(func.count()).select_from(Inquiry).where(
-            Inquiry.status == "completed", *_range_filter(Inquiry.completed_at, start, end)
-        )
+    inq_completed_in_cohort = db.scalar(
+        select(func.count()).select_from(Inquiry)
+        .where(Inquiry.status == "completed", *iqc_cond)
     ) or 0
-    inquiry_resolution_rate = (inq_completed / inq_total) if inq_total else 0.0
+    resolution_rate = (inq_completed_in_cohort / inq_total) if inq_total else 0.0
 
-    # 만족도(고객 설문) → Inquiry.customer_satisfaction 기반
-    csat_rate = float(db.scalar(
-        select(func.avg(case((Inquiry.customer_satisfaction == "satisfied", 1), else_=0).cast(float)))
-        .where(Inquiry.customer_satisfaction.isnot(None), *_range_filter(Inquiry.created_at, start, end))
-    ) or 0.0)
+    csat_rate = db.scalar(
+        select(func.avg(
+            case((Inquiry.customer_satisfaction == "satisfied", 1), else_=0)
+        ).cast(Float)).where(Inquiry.customer_satisfaction.isnot(None), *iqc_cond)
+    ) or 0.0
 
-    # 세션당 평균 턴 수
-    msg_per_session = (
+    # 평균 "턴": user/bot만 포함, 1턴=유저+봇 2메시지 가정
+    per_sess = (
         select(Message.session_id, func.count().label("cnt"))
-        .where(*_range_filter(Message.created_at, start, end))
+        .where(Message.role.in_(("user","bot")), *msg_cond)
         .group_by(Message.session_id)
         .subquery()
     )
-    #
-    avg_turns = float(db.scalar(select(func.avg(literal_column("cnt").cast(float))).select_from(msg_per_session)) or 0.0)
+    avg_msgs = db.scalar(select(func.avg(per_sess.c.cnt).cast(Float))) or 0.0
+    avg_turns = avg_msgs / 2.0    # user/bot 2건의 대화는 1개의 턴 이라서..
 
-    # 완료된 세션 비율
-    session_resolved_rate = float(db.scalar(
-        select(func.avg(case((ChatSession.resolved.is_(True), 1), else_=0).cast(float)))
-        .where(*_range_filter(ChatSession.created_at, start, end))
-    ) or 0.0)
+    session_resolved_rate = db.scalar(
+        select(func.avg(cast(case((ChatSession.resolved.is_(True), 1), else_=0), Float)))
+        .where(*cs_cond)
+    ) or 0.0
 
     return {
         "total_sessions": total_sessions,
-        "avg_response_ms": round(avg_response_ms, 2),
-        "satisfaction_rate": round(csat_rate, 4),
+        "avg_response_ms": round(float(avg_response_ms), 2),
+        "satisfaction_rate": round(float(csat_rate), 4),
         "inquiry": {
             "total": inq_total,
-            "completed": inq_completed,
-            "resolution_rate": round(inquiry_resolution_rate, 4),
+            "completed": inq_completed_in_cohort,
+            "resolution_rate": round(float(resolution_rate), 4),
         },
-        "avg_turns": round(avg_turns, 2),
-        "session_resolved_rate": round(session_resolved_rate, 4),
+        "avg_turns": round(float(avg_turns), 2),
+        "session_resolved_rate": round(float(session_resolved_rate), 4),
     }
 
 
+
+# def get_dashboard_metrics(
+#     db: Session, *, start: Optional[datetime] = None, end: Optional[datetime] = None) -> Dict[str, Any]:
+#     # 총 세션
+#     total_sessions = db.scalar(
+#         select(func.count()).select_from(ChatSession).where(*_range_filter(ChatSession.created_at, start, end))
+#     ) or 0
+#
+#     # 평균 응답(ms) - bot 메시지
+#     avg_response_ms = float(db.scalar(
+#         select(func.avg(Message.response_latency_ms.cast(float)))
+#         .where(Message.role == "bot", *_range_filter(Message.created_at, start, end))
+#     ) or 0.0)
+#
+#     # 문의 해결률
+#     inq_total = db.scalar(
+#         select(func.count()).select_from(Inquiry).where(*_range_filter(Inquiry.created_at, start, end))
+#     ) or 0
+#     inq_completed = db.scalar(
+#         select(func.count()).select_from(Inquiry).where(
+#             Inquiry.status == "completed", *_range_filter(Inquiry.completed_at, start, end)
+#         )
+#     ) or 0
+#     inquiry_resolution_rate = (inq_completed / inq_total) if inq_total else 0.0
+#
+#     # 만족도(고객 설문) → Inquiry.customer_satisfaction 기반
+#     csat_rate = float(db.scalar(
+#         select(func.avg(case((Inquiry.customer_satisfaction == "satisfied", 1), else_=0).cast(float)))
+#         .where(Inquiry.customer_satisfaction.isnot(None), *_range_filter(Inquiry.created_at, start, end))
+#     ) or 0.0)
+#
+#     # 세션당 평균 턴 수
+#     msg_per_session = (
+#         select(Message.session_id, func.count().label("cnt"))
+#         .where(*_range_filter(Message.created_at, start, end))
+#         .group_by(Message.session_id)
+#         .subquery()
+#     )
+#
+#     avg_turns = float(db.scalar(select(func.avg(literal_column("cnt").cast(float))).select_from(msg_per_session)) or 0.0)
+#
+#     # 완료된 세션 비율
+#     session_resolved_rate = float(db.scalar(
+#         select(func.avg(case((ChatSession.resolved.is_(True), 1), else_=0).cast(float)))
+#         .where(*_range_filter(ChatSession.created_at, start, end))
+#     ) or 0.0)
+#
+#     return {
+#         "total_sessions": total_sessions,
+#         "avg_response_ms": round(avg_response_ms, 2),
+#         "satisfaction_rate": round(csat_rate, 4),
+#         "inquiry": {
+#             "total": inq_total,
+#             "completed": inq_completed,
+#             "resolution_rate": round(inquiry_resolution_rate, 4),
+#         },
+#         "avg_turns": round(avg_turns, 2),
+#         "session_resolved_rate": round(session_resolved_rate, 4),
+#     }
+#
+
 def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]:
-    end = datetime.datetime.now(datetime.UTC)
+    end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
 
     bucket = func.date_trunc("day", ChatSession.created_at).label("ts")
@@ -106,7 +168,7 @@ def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]
 
 
 def get_hourly_usage(db: Session, *, days: int = 7) -> List[Dict[str, Any]]:
-    end = datetime.datetime.now(datetime.UTC)
+    end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
     bucket = func.date_trunc("hour", Message.created_at).label("ts")
     rows = db.execute(
