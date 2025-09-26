@@ -58,24 +58,27 @@ class InquiryHistory(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     inquiry_id = Column(BigInteger, ForeignKey("inquiry.id", ondelete="CASCADE"), nullable=False)
     action = Column(String, nullable=False)
-    admin_id = Column(BigInteger, ForeignKey("admin_user.id", ondelete="SET NULL"))
-    to_admin_id = Column(BigInteger, ForeignKey("admin_user.id", ondelete="SET NULL"))
+    # admin_name = Column(String, ForeignKey("admin_user.name", ondelete="SET NULL"))
+    admin_name = Column(String)
+    # admin_id = Column(BigInteger, ForeignKey("admin_user.id", ondelete="SET NULL"))
+    # to_admin_id = Column(BigInteger, ForeignKey("admin_user.id", ondelete="SET NULL"))
     details = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     inquiry = relationship("Inquiry", back_populates="histories")
-    admin = relationship("AdminUser", foreign_keys=[admin_id])
-    to_admin = relationship("AdminUser", foreign_keys=[to_admin_id])
+    # admin = relationship("AdminUser", foreign_keys=[admin_name])
+    # admin = relationship("AdminUser", foreign_keys=[admin_id])
+    # to_admin = relationship("AdminUser", foreign_keys=[to_admin_id])
 
     __table_args__ = (
         CheckConstraint(
             "action IN ('assign','on_hold','resume','transfer','complete','note','contact','delete')",
             name="chk_inqh_action"
         ),
-        CheckConstraint("action <> 'transfer' OR to_admin_id IS NOT NULL", name="chk_inqh_transfer_consistency"),
+        # CheckConstraint("action <> 'transfer' OR to_admin_id IS NOT NULL", name="chk_inqh_transfer_consistency"),
         Index("idx_inqh_inquiry_time", "inquiry_id", "created_at"),
         Index("idx_inqh_action_time", "action", "created_at"),
-        Index("idx_inqh_admin_time", "admin_id", "created_at"),
+        # Index("idx_inqh_admin_time", "admin_id", "created_at"),
     )
 
 __all__ = ["Inquiry", "InquiryHistory"]
