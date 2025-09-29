@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from langchain.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_service.chain.qa_chain import make_qa_chain
+
 
 from langchain_service.embedding.get_vector import text_to_vector
 from crud import chat as crud_chat
@@ -45,7 +47,8 @@ class QAPipeline:
         history = "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in history_msgs])
 
         # 4. 체인 실행
-        chain = self.prompt | self.llm | StrOutputParser()
+        chain = make_qa_chain(db, get_llm, text_to_vector)
+        # chain = self.prompt | self.llm | StrOutputParser()
         answer = chain.invoke({"history": history, "context": context, "input": question})
 
         # 5. 대화 로그 저장

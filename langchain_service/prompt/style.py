@@ -18,12 +18,14 @@ def policy_text(*, block_inappropriate: bool, restrict_non_tech: bool,
         lines.append("확신 낮음 또는 범위 밖이면 상담원 연결을 제안.")
     return "\n".join(lines)
 
+
 def build_system_prompt(style: Style, **flags) -> str:
     return "\n".join([
         "너의 역할: knowledge 기반 RAG 응답 엔진.",
         STYLE_MAP[style],
         policy_text(**flags)
     ])
+
 
 def llm_params(fast_response_mode: bool) -> dict:
     # 필요 시 조정
