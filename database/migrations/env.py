@@ -1,27 +1,32 @@
+# database/migrations/env.py
 import os, sys
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+# 1) 프로젝트 루트 경로 주입 (env.py: database/migrations/ 기준으로 두 단계 상위가 루트)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-from database.base import Base, DATABASE_URL
-import models
+# 2) 앱과 동일한 Base / DATABASE_URL 로드
+try:
+    from garam_backend.database.base import Base, DATABASE_URL  # 패키지형 배포일 때
+    import models  # 모든 모델 로드
+except ImportError:
+    from database.base import Base, DATABASE_URL                # 로컬 경로일 때
+    import models
 
-# Alembic Config 객체
+# 3) Alembic 설정
 config = context.config
-
-# 로깅 설정
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# target_metadata 지정
-target_metadata = Base.metadata
-
-# DATABASE_URL 설정
+# 4) Alembic이 앱과 동일 DB를 보게 강제
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
+
+# 5) 메타데이터 지정
+target_metadata = Base.metadata
 
 def run_migrations_offline():
     url = config.get_main_option("sqlalchemy.url")
@@ -41,9 +46,7 @@ def run_migrations_online():
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
             context.run_migrations()
 

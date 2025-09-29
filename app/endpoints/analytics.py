@@ -3,6 +3,8 @@ from datetime import datetime, timezone, timedelta, date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy.orm import Session
+from crud import daily_dashboard as crud
+from schemas.daily_dashboard import DailyDashboardResponse, WindowAveragesResponse, UpsertPayload
 
 from database.session import get_db
 from crud import analytics as crud
@@ -10,13 +12,11 @@ from schemas.analytics import DashboardMetricsResponse, InquiryStats, DailyPoint
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
-from crud import daily_dashboard as crud
-from schemas.daily_dashboard import DailyDashboardResponse, WindowAveragesResponse, UpsertPayload
-
 
 # ISO8601 문자열을 datetime으로 변환(빈 값은 None 유지). 쿼리 파라미터 파싱용.
 def _parse_dt(v: Optional[str]) -> Optional[datetime]:
     return datetime.fromisoformat(v) if v else None
+
 
 # 기간 필터(ISO8601). 예: 2025-09-26T00:00:00
 @router.get("/dashboard", response_model=DashboardMetricsResponse)

@@ -7,6 +7,8 @@ from models import knowledge
 from models import faq
 from models import system
 from models import model
+from .daily_dashboard import DailyDashboard
+
 
 # __all__ 지정해서 다른 곳에서 import * 할 때도 안전하게
 __all__ = [

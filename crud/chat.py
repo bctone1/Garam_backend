@@ -8,6 +8,9 @@ from sqlalchemy.orm import Session
 from models.chat import ChatSession, Message, Feedback
 
 Role = Literal["user", "bot"]
+
+# 무응답은 계산하지 않음
+## 도움:4 / 미도움:1 / 무응답 : 5 => 문제해결률은 80% (not 40%)
 Rating = Literal["helpful", "not_helpful"]
 
 

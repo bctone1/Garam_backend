@@ -16,7 +16,11 @@ class DailyDashboard(Base):
     messages_total = Column(Integer, nullable=False, default=0)
 
     avg_response_ms = Column(Numeric(10, 2), nullable=False, default=0)
+
+    # Bot  응답 지연 시간의 중앙값
     p50_response_ms = Column(Numeric(10, 2), nullable=False, default=0)
+
+    # 간헐적 지연 탐지
     p90_response_ms = Column(Numeric(10, 2), nullable=False, default=0)
 
     avg_turns = Column(Numeric(6, 2), nullable=False, default=0)

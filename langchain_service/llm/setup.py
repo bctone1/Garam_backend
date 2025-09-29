@@ -7,7 +7,7 @@ from pydantic import SecretStr
 from openai import OpenAI
 import os
 
-
+# 테스트용 openai 와 실제 서비스는 Exaone 이용
 def get_llm(provider="openai", model = None, api_key : str = None, temperature = 0.7):
     if provider == "openai":
         model_name = model or config.DEFAULT_CHAT_MODEL
