@@ -81,67 +81,6 @@ def get_dashboard_metrics(db, *, start=None, end=None):
     }
 
 
-
-# def get_dashboard_metrics(
-#     db: Session, *, start: Optional[datetime] = None, end: Optional[datetime] = None) -> Dict[str, Any]:
-#     # 총 세션
-#     total_sessions = db.scalar(
-#         select(func.count()).select_from(ChatSession).where(*_range_filter(ChatSession.created_at, start, end))
-#     ) or 0
-#
-#     # 평균 응답(ms) - bot 메시지
-#     avg_response_ms = float(db.scalar(
-#         select(func.avg(Message.response_latency_ms.cast(float)))
-#         .where(Message.role == "bot", *_range_filter(Message.created_at, start, end))
-#     ) or 0.0)
-#
-#     # 문의 해결률
-#     inq_total = db.scalar(
-#         select(func.count()).select_from(Inquiry).where(*_range_filter(Inquiry.created_at, start, end))
-#     ) or 0
-#     inq_completed = db.scalar(
-#         select(func.count()).select_from(Inquiry).where(
-#             Inquiry.status == "completed", *_range_filter(Inquiry.completed_at, start, end)
-#         )
-#     ) or 0
-#     inquiry_resolution_rate = (inq_completed / inq_total) if inq_total else 0.0
-#
-#     # 만족도(고객 설문) → Inquiry.customer_satisfaction 기반
-#     csat_rate = float(db.scalar(
-#         select(func.avg(case((Inquiry.customer_satisfaction == "satisfied", 1), else_=0).cast(float)))
-#         .where(Inquiry.customer_satisfaction.isnot(None), *_range_filter(Inquiry.created_at, start, end))
-#     ) or 0.0)
-#
-#     # 세션당 평균 턴 수
-#     msg_per_session = (
-#         select(Message.session_id, func.count().label("cnt"))
-#         .where(*_range_filter(Message.created_at, start, end))
-#         .group_by(Message.session_id)
-#         .subquery()
-#     )
-#
-#     avg_turns = float(db.scalar(select(func.avg(literal_column("cnt").cast(float))).select_from(msg_per_session)) or 0.0)
-#
-#     # 완료된 세션 비율
-#     session_resolved_rate = float(db.scalar(
-#         select(func.avg(case((ChatSession.resolved.is_(True), 1), else_=0).cast(float)))
-#         .where(*_range_filter(ChatSession.created_at, start, end))
-#     ) or 0.0)
-#
-#     return {
-#         "total_sessions": total_sessions,
-#         "avg_response_ms": round(avg_response_ms, 2),
-#         "satisfaction_rate": round(csat_rate, 4),
-#         "inquiry": {
-#             "total": inq_total,
-#             "completed": inq_completed,
-#             "resolution_rate": round(inquiry_resolution_rate, 4),
-#         },
-#         "avg_turns": round(avg_turns, 2),
-#         "session_resolved_rate": round(session_resolved_rate, 4),
-#     }
-#
-
 def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]:
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)

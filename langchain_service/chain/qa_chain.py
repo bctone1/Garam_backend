@@ -34,7 +34,7 @@ def make_qa_chain(db, get_llm, text_to_vector, *, knowledge_id=None, top_k=5):
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_txt),
         ("system", "다음은 지식베이스 컨텍스트다.\n{context}\n"
-                   "컨텍스트 밖이면 '지식베이스에 없음'이라고만 답하라."),
+                   "컨텍스트 밖이면 '해당내용은 찾을 수 없음'이라고만 답하라."),
         ("human", "{question}")
     ])
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy.orm import Session
 
 from database.session import get_db
@@ -9,6 +9,10 @@ from crud import analytics as crud
 from schemas.analytics import DashboardMetricsResponse, InquiryStats, DailyPoint, HourlyPoint, ModelStat
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
+
+from crud import daily_dashboard as crud
+from schemas.daily_dashboard import DailyDashboardResponse, WindowAveragesResponse, UpsertPayload
+
 
 # ISO8601 문자열을 datetime으로 변환(빈 값은 None 유지). 쿼리 파라미터 파싱용.
 def _parse_dt(v: Optional[str]) -> Optional[datetime]:
@@ -62,4 +66,32 @@ def model_stats(
 ):
     # 모델별 통계(정확도, 평균응답(ms), 월 대화량, 가동률 등) 반환
     return [ModelStat(**r) for r in crud.get_model_stats(db, limit=limit)]
+
+
+
+@router.post("/daily/upsert", status_code=status.HTTP_204_NO_CONTENT)
+def upsert_daily(payload: UpsertPayload, db: Session = Depends(get_db)):
+    crud.upsert_daily_dashboard(db, start=payload.start, end=payload.end)
+    return
+
+@router.get("/daily", response_model=List[DailyDashboardResponse])
+def get_daily(
+    start: str = Query(..., description="YYYY-MM-DD (KST)"),
+    end: str = Query(..., description="YYYY-MM-DD (KST)"),
+    include_today: bool = Query(True),
+    db: Session = Depends(get_db),
+):
+    s = date.fromisoformat(start)
+    e = date.fromisoformat(end)
+    items = crud.list_daily(db, start=s, end=e, include_today=include_today)
+    return [DailyDashboardResponse.model_validate(i) for i in items]
+
+@router.get("/windows", response_model=WindowAveragesResponse)
+def get_window(
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+):
+    data = crud.window_averages(db, days=days)
+    return WindowAveragesResponse(**data)
+
 
