@@ -25,7 +25,7 @@ def list_users(
     department: Optional[str] = None,
     q: Optional[str] = None,  # name/email 부분검색
 ) -> List[AdminUser]:
-    stmt = select(AdminUser).order_by(AdminUser.created_at.desc())
+    stmt = select(AdminUser).order_by(AdminUser.id.asc())
 
     if department:
         stmt = stmt.where(AdminUser.department == department)
