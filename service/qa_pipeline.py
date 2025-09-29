@@ -11,7 +11,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from langchain_service.embedding.get_vector import text_to_vector
-# from crud import conversation as crud_conversation
+from crud import chat as crud_chat
 from crud import knowledge as crud_knowledge
 from langchain_service.llm.setup import get_llm
 
@@ -41,7 +41,7 @@ class QAPipeline:
         context = "\n".join([d.chunk_text for d in docs])
 
         # 3. 대화 기록 검색
-        # history_msgs = crud_conversation.get_relevant_messages(db, session_id, q_vector, top_n=5)
+        history_msgs = crud_chat.get_relevant_messages(db, session_id, q_vector, top_n=5)
         history = "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in history_msgs])
 
         # 4. 체인 실행
@@ -49,7 +49,7 @@ class QAPipeline:
         answer = chain.invoke({"history": history, "context": context, "input": question})
 
         # 5. 대화 로그 저장
-        # crud_conversation.save_message(db, session_id, "user", question, q_vector)
-        # crud_conversation.save_message(db, session_id, "assistant", answer, None)
+        crud_chat.save_message(db, session_id, "user", question, q_vector)
+        crud_chat.save_message(db, session_id, "assistant", answer, None)
 
         return answer
