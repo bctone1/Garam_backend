@@ -1,32 +1,47 @@
-import os
+# main.py (lifespan 버전)
+import os, logging, uvicorn
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
 from app.routers import register_routers
 from core.config import UPLOAD_FOLDER
-import uvicorn
+from core.scheduler import init_scheduler  # APScheduler 초기화
 
 load_dotenv()
+log = logging.getLogger("uvicorn")
 
-app = FastAPI(debug=True)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    sched = init_scheduler()
+    sched.start()
+    app.state.scheduler = sched
+    log.info("APScheduler started")
+    try:
+        yield
+    finally:
+        # shutdown
+        sched.shutdown(wait=False)
+        log.info("APScheduler stopped")
 
-# static files
+app = FastAPI(debug=True, lifespan=lifespan)
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.mount("/file", StaticFiles(directory=UPLOAD_FOLDER), name="file")
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 운영에서는 화이트리스트로 제한
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# API routers
-# register_routers(app, prefix=os.getenv("API_PREFIX", "/app"))
 register_routers(app)
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
