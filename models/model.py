@@ -24,7 +24,10 @@ class Model(Base):
     month_conversations = Column(Integer, nullable=False, server_default=text("0"))
     uptime_percent = Column(Numeric(5, 2), nullable=False, server_default=text("0"))
 
+    # 응답 스타일 설정
     response_style = Column(Text, nullable=False, server_default=text("'professional'"))
+
+    # 응답 품질 설정
     block_inappropriate = Column(Boolean, nullable=False, server_default=text("false"))
     restrict_non_tech = Column(Boolean, nullable=False, server_default=text("false"))
     fast_response_mode = Column(Boolean, nullable=False, server_default=text("false"))

@@ -1,5 +1,4 @@
 # Pydantic 스키마 (요청/응답)
-
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List, Any

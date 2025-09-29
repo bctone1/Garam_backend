@@ -1,5 +1,4 @@
 # DB 접근 로직
-
 from __future__ import annotations
 from typing import Optional, List, Dict, Any, Literal
 from sqlalchemy import select, update as sa_update
@@ -30,6 +29,7 @@ def list_models(
     q: Optional[str] = None,  # name/description 검색
     order_by: OrderBy = "recent",
 ) -> List[Model]:
+    # stmt 는 statement의 줄임말 SQL Alechemy의 select 객체
     stmt = select(Model)
 
     if provider_name:

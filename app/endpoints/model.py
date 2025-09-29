@@ -16,7 +16,7 @@ OrderBy = Literal["recent", "accuracy", "uptime", "speed", "conversations"]
 
 @router.post("/", response_model=ModelResponse, status_code=status.HTTP_201_CREATED)
 def create_model(payload: ModelCreate, db: Session = Depends(get_db)):
-    return crud.create(db, payload.dict())
+    return crud.create(db, payload.model_dump())
 
 
 @router.get("/active", response_model=ModelResponse)
