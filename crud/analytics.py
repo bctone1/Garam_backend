@@ -22,10 +22,10 @@ def _range_filter(col, start: Optional[datetime], end: Optional[datetime]):
 
 def get_dashboard_metrics(db, *, start=None, end=None):
     # 공통 기간 조건
-    cs_cond  = _range_filter(ChatSession.created_at, start, end)
-    msg_cond = _range_filter(Message.created_at, start, end)
-    iqc_cond = _range_filter(Inquiry.created_at, start, end)
-    iqf_cond = _range_filter(Inquiry.completed_at, start, end)
+    cs_cond  = _range_filter(ChatSession.created_at, start, end)    # 챗세션 조건
+    msg_cond = _range_filter(Message.created_at, start, end)    # 메세지
+    iqc_cond = _range_filter(Inquiry.created_at, start, end)    # 상담
+    iqf_cond = _range_filter(Inquiry.completed_at, start, end)    # 상담 완료
 
     total_sessions = db.scalar(
         select(func.count()).select_from(ChatSession).where(*cs_cond)
@@ -146,6 +146,7 @@ def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
 
+    # 날짜 day 와 시간(time stamp) 를 분리
     bucket = func.date_trunc("day", ChatSession.created_at).label("ts")
     rows = db.execute(
         select(bucket, func.count().label("sessions"))
@@ -154,6 +155,7 @@ def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]
         .order_by(bucket.asc())
     ).all()
 
+    # message 즉 user 와 bot 한줄 한줄의 metadata
     mbucket = func.date_trunc("day", Message.created_at).label("ts")
     resp_map = {
         r.ts: float(r.avg_response_ms or 0.0)
@@ -164,7 +166,8 @@ def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]
         ).all()
     }
 
-    return [{"ts": r.ts, "sessions": int(r.sessions or 0), "avg_response_ms": round(resp_map.get(r.ts, 0.0), 2)} for r in rows]
+    return [{"ts": r.ts, "sessions": int(r.sessions or 0),
+             "avg_response_ms": round(resp_map.get(r.ts, 0.0), 2)} for r in rows]
 
 
 def get_hourly_usage(db: Session, *, days: int = 7) -> List[Dict[str, Any]]:
@@ -186,7 +189,7 @@ def get_model_stats(db: Session, *, limit: int = 10, start: Optional[datetime] =
     cs_conds = _range_filter(ChatSession.created_at, start, end)
     ms_conds = _range_filter(Message.created_at, start, end)
 
-    # 모델별 봇 응답 평균(ms) 서브쿼리
+    # 모델별 봇 응답 평균(ms) 서브쿼리 (모델별로 해야하나??)
     resp_agg = (
         select(
             ChatSession.model_id.label("mid"),

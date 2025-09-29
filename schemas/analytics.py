@@ -16,6 +16,7 @@ class DashboardMetricsResponse(BaseModel):
     avg_turns: float
     session_resolved_rate: float  # 0~1
 
+# ts는 time stamp 를 의미/ session 은 그 날 세션의 수/ 그날 평균 응답시간
 class DailyPoint(BaseModel):
     ts: datetime
     sessions: int

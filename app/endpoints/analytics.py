@@ -17,7 +17,7 @@ def _parse_dt(v: Optional[str]) -> Optional[datetime]:
 # 기간 필터(ISO8601). 예: 2025-09-26T00:00:00
 @router.get("/dashboard", response_model=DashboardMetricsResponse)
 def dashboard_metrics(
-    start: Optional[str] = Query(None, description="ISO8601"),
+    start: Optional[str] = Query(None, description="ISO8601:2025-09-26T00:00:00"),
     end: Optional[str] = Query(None, description="ISO8601"),
     db: Session = Depends(get_db),
 ):
@@ -31,6 +31,7 @@ def dashboard_metrics(
         avg_turns=data["avg_turns"],
         session_resolved_rate=data["session_resolved_rate"],
     )
+
 
 # 일일 문의량
 @router.get("/timeseries/daily", response_model=List[DailyPoint])
