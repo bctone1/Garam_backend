@@ -130,7 +130,6 @@ def get_hourly_usage(db: Session, *, days: int = 7) -> List[Dict[str, Any]]:
     return [{"ts": r.ts, "messages": int(r.messages or 0)} for r in rows]
 
 
-
 def get_model_stats(db: Session, *, limit: int = 10, start: Optional[datetime] = None, end: Optional[datetime] = None) -> List[Dict[str, Any]]:
     # 기간 필터
     cs_conds = _range_filter(ChatSession.created_at, start, end)
