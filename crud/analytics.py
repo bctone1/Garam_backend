@@ -100,8 +100,15 @@ def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]
     resp_map = {
         r.ts: float(r.avg_response_ms or 0.0)
         for r in db.execute(
-            select(mbucket, func.avg(Message.response_latency_ms.cast(float)).label("avg_response_ms"))
-            .where(Message.role == "assistant", Message.created_at >= start, Message.created_at < end)
+            select(
+                mbucket,
+                func.avg(cast(Message.response_latency_ms, Float)).label("avg_response_ms")
+            )
+            .where(
+                Message.role == "assistant",
+                Message.created_at >= start,
+                Message.created_at < end,
+            )
             .group_by(mbucket)
         ).all()
     }
