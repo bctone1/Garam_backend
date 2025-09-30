@@ -32,7 +32,7 @@ class ChatSessionResponse(ChatSessionBase):
     ended_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # -------------------------------
@@ -62,7 +62,7 @@ class MessageResponse(MessageBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # -------------------------------
@@ -89,4 +89,4 @@ class FeedbackResponse(FeedbackBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

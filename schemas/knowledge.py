@@ -39,7 +39,7 @@ class KnowledgeResponse(KnowledgeBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # ===============================
@@ -65,7 +65,7 @@ class KnowledgePageResponse(KnowledgePageBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # ===============================
@@ -97,4 +97,4 @@ class KnowledgeChunkResponse(KnowledgeChunkBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
