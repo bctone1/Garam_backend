@@ -106,9 +106,11 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
 # d 구간 조회. include_today=True면 오늘은 즉시산출로 합치기
 def list_daily(db: Session, *, start: date, end: date, include_today: bool = True) -> List[DailyDashboard]:
     if not include_today:
-        q = (select(DailyDashboard)
-             .where(and_(DailyDashboard.d >= start, DailyDashboard.d <= end))
-             .order_by(DailyDashboard.d.desc()))
+        q = (
+            select(DailyDashboard)
+            .where(and_(DailyDashboard.d >= start, DailyDashboard.d <= end))
+            .order_by(DailyDashboard.d.desc())
+        )
         return list(db.scalars(q).all())
 
     sql = text("""
@@ -152,7 +154,7 @@ def list_daily(db: Session, *, start: date, end: date, include_today: bool = Tru
           WHERE rating='not_helpful'
             AND ((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d) AS feedback_not_helpful,
         (
-          SELECT jsonb_object_agg(gs.h::text, COALESCE(c,0)) FROM (
+          SELECT jsonb_object_agg(x.h::text, COALESCE(x.c,0)) FROM (
             SELECT gs.h,
               (
                 SELECT COUNT(*) FROM chat_session s2
@@ -173,6 +175,7 @@ def list_daily(db: Session, *, start: date, end: date, include_today: bool = Tru
     """)
     rows = db.execute(sql, {"start": start}).mappings().all()
     return [DailyDashboard(**r) for r in rows]
+
 
 def window_averages(db: Session, *, days: int) -> Dict[str, float]:
     start = date.today() - timedelta(days=days - 1)
