@@ -7,7 +7,7 @@ from sqlalchemy import select, update as sa_update, func
 from sqlalchemy.orm import Session
 from models.chat import ChatSession, Message, Feedback
 
-Role = Literal["user", "bot"]
+Role = Literal["user", "assistant"]
 
 # 무응답은 계산하지 않음
 ## 도움:4 / 미도움:1 / 무응답 : 5 => 문제해결률은 80% (not 40%)
@@ -234,11 +234,11 @@ def session_summary(db: Session, session_id: int) -> Dict[str, Any]:
     users = db.execute(
         select(func.count()).select_from(Message).where(Message.session_id == session_id, Message.role == "user")
     ).scalar_one()
-    bots = total - users
+    assistants = total - users
     last = last_messages(db, session_id, 1)
     return {
         "messages_total": int(total or 0),
         "messages_user": int(users or 0),
-        "messages_bot": int(bots or 0),
+        "messages_assistant": int(assistants or 0),
         "last_created_at": last[0].created_at if last else None,
     }

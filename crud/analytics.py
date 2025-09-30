@@ -34,7 +34,7 @@ def get_dashboard_metrics(db, *, start=None, end=None):
 
     avg_response_ms = db.scalar(
         select(func.avg(Message.response_latency_ms).cast(Float))
-        .where(Message.role == "bot", *msg_cond)
+        .where(Message.role == "assistant", *msg_cond)
     ) or 0.0
 
     # 코호트 일치형 해결률: 기간 내 "생성된" 문의 중 완료 상태 비율
@@ -53,15 +53,15 @@ def get_dashboard_metrics(db, *, start=None, end=None):
         ).cast(Float)).where(Inquiry.customer_satisfaction.isnot(None), *iqc_cond)
     ) or 0.0
 
-    # 평균 "턴": user/bot만 포함, 1턴=유저+봇 2메시지 가정
+    # 평균 "턴": user/assistant만 포함, 1턴=유저+봇 2메시지 가정
     per_sess = (
         select(Message.session_id, func.count().label("cnt"))
-        .where(Message.role.in_(("user","bot")), *msg_cond)
+        .where(Message.role.in_(("user","assistant")), *msg_cond)
         .group_by(Message.session_id)
         .subquery()
     )
     avg_msgs = db.scalar(select(func.avg(per_sess.c.cnt).cast(Float))) or 0.0
-    avg_turns = avg_msgs / 2.0    # user/bot 2건의 대화는 1개의 턴 이라서..
+    avg_turns = avg_msgs / 2.0    # user/assistant 2건의 대화는 1개의 턴 이라서..
 
     session_resolved_rate = db.scalar(
         select(func.avg(cast(case((ChatSession.resolved.is_(True), 1), else_=0), Float)))
@@ -95,13 +95,13 @@ def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]
         .order_by(bucket.asc())
     ).all()
 
-    # message 즉 user 와 bot 한줄 한줄의 metadata
+    # message 즉 user 와 assistant 한줄 한줄의 metadata
     mbucket = func.date_trunc("day", Message.created_at).label("ts")
     resp_map = {
         r.ts: float(r.avg_response_ms or 0.0)
         for r in db.execute(
             select(mbucket, func.avg(Message.response_latency_ms.cast(float)).label("avg_response_ms"))
-            .where(Message.role == "bot", Message.created_at >= start, Message.created_at < end)
+            .where(Message.role == "assistant", Message.created_at >= start, Message.created_at < end)
             .group_by(mbucket)
         ).all()
     }
@@ -136,7 +136,7 @@ def get_model_stats(db: Session, *, limit: int = 10, start: Optional[datetime] =
             func.avg(cast(Message.response_latency_ms, Float)).label("avg_ms"),
         )
         .join(Message, Message.session_id == ChatSession.id)
-        .where(Message.role == "bot", *ms_conds)
+        .where(Message.role == "assistant", *ms_conds)
         .group_by(ChatSession.model_id)
         .subquery()
     )

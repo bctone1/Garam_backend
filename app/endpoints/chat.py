@@ -96,7 +96,7 @@ def list_messages(
     session_id: int,
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    role: Optional[str] = Query(None, pattern="^(user|bot)$"),
+    role: Optional[str] = Query(None, pattern="^(user|assistant)$"),
     db: Session = Depends(get_db),
 ):
     # 세션 존재 확인

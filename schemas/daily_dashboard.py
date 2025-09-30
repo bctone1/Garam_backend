@@ -7,7 +7,7 @@ class DailyDashboardBase(BaseModel):
     d: date
     weekday: int
     sessions_total: int
-    sessions_with_bot: int
+    sessions_with_assistant: int
     sessions_resolved: int
     messages_total: int
     avg_response_ms: float
@@ -28,7 +28,7 @@ class WindowAveragesResponse(BaseModel):
     avg_messages: float
     avg_response_ms: float
     avg_turns: float
-    resolve_rate_excluding_noresp: float  # resolved / sessions_with_bot
+    resolve_rate_excluding_noresp: float  # resolved / sessions_with_assistant
     csat_rate: float                      # helpful / (helpful+not_helpful)
 
 class UpsertPayload(BaseModel):

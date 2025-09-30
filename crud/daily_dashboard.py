@@ -37,7 +37,7 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
       FROM message
       WHERE role IN ('assistant','user')
     ),
-    bot_latency AS (
+    assistant_latency AS (
       SELECT d,
              AVG(response_latency_ms)::numeric(10,2) AS avg_ms,
              percentile_cont(0.5) WITHIN GROUP (ORDER BY response_latency_ms)::numeric(10,2) AS p50_ms,
@@ -45,7 +45,7 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
       FROM msg WHERE role='assistant'
       GROUP BY d
     ),
-    bot_sessions AS (SELECT d, session_id FROM msg WHERE role='assistant' GROUP BY d, session_id),
+    assistant_sessions AS (SELECT d, session_id FROM msg WHERE role='assistant' GROUP BY d, session_id),
     turns AS (
       SELECT d, session_id, floor(count(*)/2.0) AS t
       FROM msg GROUP BY d, session_id
@@ -66,12 +66,12 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
         d.d,
         EXTRACT(ISODOW FROM d.d)::smallint AS weekday,
         COALESCE((SELECT COUNT(*) FROM cs WHERE cs.d = d.d),0) AS sessions_total,
-        COALESCE((SELECT COUNT(*) FROM bot_sessions WHERE bot_sessions.d = d.d),0) AS sessions_with_bot,
+        COALESCE((SELECT COUNT(*) FROM assistant_sessions WHERE assistant_sessions.d = d.d),0) AS sessions_with_assistant,
         COALESCE((SELECT COUNT(*) FROM cs WHERE cs.d = d.d AND cs.resolved IS TRUE),0) AS sessions_resolved,
         COALESCE((SELECT COUNT(*) FROM msg WHERE msg.d = d.d),0) AS messages_total,
-        COALESCE((SELECT avg_ms FROM bot_latency WHERE bot_latency.d = d.d),0)::numeric(10,2) AS avg_response_ms,
-        COALESCE((SELECT p50_ms FROM bot_latency WHERE bot_latency.d = d.d),0)::numeric(10,2) AS p50_response_ms,
-        COALESCE((SELECT p90_ms FROM bot_latency WHERE bot_latency.d = d.d),0)::numeric(10,2) AS p90_response_ms,
+        COALESCE((SELECT avg_ms FROM assistant_latency WHERE assistant_latency.d = d.d),0)::numeric(10,2) AS avg_response_ms,
+        COALESCE((SELECT p50_ms FROM assistant_latency WHERE assistant_latency.d = d.d),0)::numeric(10,2) AS p50_response_ms,
+        COALESCE((SELECT p90_ms FROM assistant_latency WHERE assistant_latency.d = d.d),0)::numeric(10,2) AS p90_response_ms,
         COALESCE((SELECT avg_turns FROM turns_avg WHERE turns_avg.d = d.d),0)::numeric(6,2) AS avg_turns,
         COALESCE((SELECT cnt FROM iq WHERE iq.d = d.d),0) AS inquiries_created,
         COALESCE((SELECT helpful FROM fb WHERE fb.d = d.d),0) AS feedback_helpful,
@@ -80,14 +80,14 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
       FROM days d
     )
     INSERT INTO daily_dashboard
-      (d, weekday, sessions_total, sessions_with_bot, sessions_resolved,
+      (d, weekday, sessions_total, sessions_with_assistant, sessions_resolved,
        messages_total, avg_response_ms, p50_response_ms, p90_response_ms,
        avg_turns, inquiries_created, feedback_helpful, feedback_not_helpful, sessions_by_hour)
     SELECT * FROM agg
     ON CONFLICT (d) DO UPDATE SET
       weekday=EXCLUDED.weekday,
       sessions_total=EXCLUDED.sessions_total,
-      sessions_with_bot=EXCLUDED.sessions_with_bot,
+      sessions_with_assistant=EXCLUDED.sessions_with_assistant,
       sessions_resolved=EXCLUDED.sessions_resolved,
       messages_total=EXCLUDED.messages_total,
       avg_response_ms=EXCLUDED.avg_response_ms,
@@ -121,7 +121,7 @@ def list_daily(db: Session, *, start: date, end: date, include_today: bool = Tru
           WHERE ((s.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d) AS sessions_total,
         (SELECT COUNT(DISTINCT m.session_id) FROM message m
           WHERE m.role='assistant'
-            AND ((m.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d) AS sessions_with_bot,
+            AND ((m.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d) AS sessions_with_assistant,
         (SELECT COUNT(*) FROM chat_session s
           WHERE s.resolved IS TRUE
             AND ((s.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d) AS sessions_resolved,
@@ -182,13 +182,13 @@ def window_averages(db: Session, *, days: int) -> Dict[str, float]:
         func.avg(DailyDashboard.avg_response_ms),
         func.avg(DailyDashboard.avg_turns),
         func.sum(DailyDashboard.sessions_resolved),
-        func.sum(DailyDashboard.sessions_with_bot),
+        func.sum(DailyDashboard.sessions_with_assistant),
         func.sum(DailyDashboard.feedback_helpful),
         func.sum(DailyDashboard.feedback_not_helpful),
     ).where(DailyDashboard.d >= start)
-    s, m, rt, t, resolved, with_bot, helpf, nhelpf = db.execute(q).one()
+    s, m, rt, t, resolved, with_assistant, helpf, nhelpf = db.execute(q).one()
     f = lambda x: float(x or 0)
-    resolve_rate = float(resolved or 0) / float(with_bot or 1)
+    resolve_rate = float(resolved or 0) / float(with_assistant or 1)
     csat_rate = float(helpf or 0) / float(((helpf or 0) + (nhelpf or 0)) or 1)
     return {
         "avg_sessions": f(s),
