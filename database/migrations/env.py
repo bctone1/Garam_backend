@@ -8,13 +8,10 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-# 2) 앱과 동일한 Base / DATABASE_URL 로드
-try:
-    from database.base import Base, DATABASE_URL  # 패키지형 배포일 때
-    import models  # 모든 모델 로드
-except ImportError:
-    from database.base import Base, DATABASE_URL                # 로컬 경로일 때
-    import models
+# 2) DATABASE_URL 로드
+from database.base import Base, DATABASE_URL
+import models  # 모든 모델 로드
+
 
 # 3) Alembic 설정
 config = context.config
