@@ -1,3 +1,4 @@
+# crud/daily_dashboard.py
 from __future__ import annotations
 from datetime import date, timedelta
 from typing import List, Dict
@@ -5,11 +6,11 @@ from sqlalchemy import text, select, and_, func
 from sqlalchemy.orm import Session
 from models.daily_dashboard import DailyDashboard
 
-# KST 날짜 기준 집계 업서트
+# KST 기준 집계 업서트
 def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
     sql = text("""
     WITH days AS (
-      SELECT g::date AS d FROM generate_series(:start::date, :end::date, interval '1 day') g
+      SELECT g::date AS d FROM generate_series(:start, :end, interval '1 day') g
     ),
     cs AS (
       SELECT id,
@@ -24,10 +25,10 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
     ),
     hour_filled AS (
       SELECT d.d,
-             jsonb_object_agg(h::text, COALESCE(ch.c,0)) AS j
+             jsonb_object_agg(gs.h::text, COALESCE(ch.c,0)) AS j
       FROM days d
-      CROSS JOIN generate_series(0,23) AS h(h)
-      LEFT JOIN cs_hour ch ON ch.d = d.d AND ch.h = h.h
+      CROSS JOIN generate_series(0,23) AS gs(h)
+      LEFT JOIN cs_hour ch ON ch.d = d.d AND ch.h = gs.h
       GROUP BY d.d
     ),
     msg AS (
@@ -151,13 +152,14 @@ def list_daily(db: Session, *, start: date, end: date, include_today: bool = Tru
           WHERE rating='not_helpful'
             AND ((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d) AS feedback_not_helpful,
         (
-          SELECT jsonb_object_agg(h::text, COALESCE(c,0)) FROM (
-            SELECT h, (
-              SELECT COUNT(*) FROM chat_session s2
-              WHERE ((s2.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d
-                AND EXTRACT(HOUR FROM ((s2.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')))::int = h
-            ) AS c
-            FROM generate_series(0,23) h
+          SELECT jsonb_object_agg(gs.h::text, COALESCE(c,0)) FROM (
+            SELECT gs.h,
+              (
+                SELECT COUNT(*) FROM chat_session s2
+                WHERE ((s2.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d
+                  AND EXTRACT(HOUR FROM ((s2.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')))::int = gs.h
+              ) AS c
+            FROM generate_series(0,23) AS gs(h)
           ) x
         ) AS sessions_by_hour,
         now() AT TIME ZONE 'Asia/Seoul' AS updated_at
@@ -170,7 +172,6 @@ def list_daily(db: Session, *, start: date, end: date, include_today: bool = Tru
     ORDER BY d DESC;
     """)
     rows = db.execute(sql, {"start": start}).mappings().all()
-    # 매핑 → Pydantic 변환은 라우터에서 처리
     return [DailyDashboard(**r) for r in rows]
 
 def window_averages(db: Session, *, days: int) -> Dict[str, float]:
@@ -186,7 +187,7 @@ def window_averages(db: Session, *, days: int) -> Dict[str, float]:
         func.sum(DailyDashboard.feedback_not_helpful),
     ).where(DailyDashboard.d >= start)
     s, m, rt, t, resolved, with_bot, helpf, nhelpf = db.execute(q).one()
-    def f(x): return float(x or 0)
+    f = lambda x: float(x or 0)
     resolve_rate = float(resolved or 0) / float(with_bot or 1)
     csat_rate = float(helpf or 0) / float(((helpf or 0) + (nhelpf or 0)) or 1)
     return {

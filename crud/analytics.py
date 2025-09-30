@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any
 from models.chat import ChatSession, Message
 from sqlalchemy import select, func, case, literal_column, cast, Float, and_
 from sqlalchemy.orm import Session
+from .daily_dashboard import upsert_daily_dashboard
 
 from models.inquiry import Inquiry
 from models.model import Model
