@@ -1,4 +1,3 @@
-# database/migrations/env.py
 import os, sys
 from logging.config import fileConfig
 from alembic import context
@@ -11,7 +10,7 @@ if BASE_DIR not in sys.path:
 
 # 2) 앱과 동일한 Base / DATABASE_URL 로드
 try:
-    from garam_backend.database.base import Base, DATABASE_URL  # 패키지형 배포일 때
+    from database.base import Base, DATABASE_URL  # 패키지형 배포일 때
     import models  # 모든 모델 로드
 except ImportError:
     from database.base import Base, DATABASE_URL                # 로컬 경로일 때
