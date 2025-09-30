@@ -1,40 +1,33 @@
-# Web framework
-fastapi>=0.110.0,<1.0
-uvicorn>=0.27.0,<1.0
-aiofiles>=23.2.1
+fastapi
+uvicorn[standard]
+aiofiles
 
-# Data validation
-pydantic[email]>=2.6.0,<3.0
-email-validator>=2.1.0.post1
+python-dotenv
+python-multipart
 
-# Database
-SQLAlchemy>=2.0.25,<3.0
-alembic>=1.12.0,<2.0
-psycopg2-binary>=2.9.9,<3.0
-pgvector>=0.2.5,<1.0
+SQLAlchemy
+alembic
+psycopg2-binary
+pgvector
 
-# Environment
-python-dotenv>=1.0.1,<2.0
-
-# File upload
-python-multipart>=0.0.9,<1.0
-
-# Security / Auth
-bcrypt>=4.1.2,<5.0
-python-jose>=3.3.0,<4.0
-
-# LangChain ecosystem
-langchain>=0.2.0,<1.0
-langchain-community>=0.2.0,<1.0
-langchain-text-splitters>=0.2.0,<1.0
-
-# Document parsing / embedding
-pymupdf>=1.23.0,<2.0
-
-# LLM Providers
-openai>=1.14.0,<2.0
-anthropic>=0.21.0,<1.0
-google-generativeai>=0.5.0,<1.0
-friendli-client>=1.0.0,<2.0
+bcrypt
+python-jose
+email-validator
 
 apscheduler
+
+# RAG/문서
+langchain
+langchain-community
+langchain-text-splitters
+pymupdf
+
+# 프로바이더
+openai
+friendli-client
+
+## 프로바이더 추가 사용시 해제
+# langchain-anthropic==0.3.20
+# anthropic==0.68.0
+# langchain-google-genai==2.1.12
+# google-ai-generativelanguage==0.7.0
