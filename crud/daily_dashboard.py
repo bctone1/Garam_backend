@@ -133,12 +133,18 @@ def list_daily(db: Session, *, start: date, end: date, include_today: bool = Tru
         (SELECT COALESCE(AVG(response_latency_ms),0)::numeric(10,2)
           FROM message WHERE role='assistant'
             AND ((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d) AS avg_response_ms,
-        (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY response_latency_ms)
-          FROM message WHERE role='assistant'
-            AND ((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d)::numeric(10,2) AS p50_response_ms,
-        (SELECT percentile_cont(0.9) WITHIN GROUP (ORDER BY response_latency_ms)
-          FROM message WHERE role='assistant'
-            AND ((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d)::numeric(10,2) AS p90_response_ms,
+        (SELECT COALESCE(
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY response_latency_ms),
+            0
+         ) FROM message WHERE role='assistant'
+            AND ((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d
+        )::numeric(10,2) AS p50_response_ms,
+        (SELECT COALESCE(
+            percentile_cont(0.9) WITHIN GROUP (ORDER BY response_latency_ms),
+            0
+         ) FROM message WHERE role='assistant'
+            AND ((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'))::date = kt.d
+        )::numeric(10,2) AS p90_response_ms,
         (SELECT COALESCE(AVG(floor(cnt/2.0)),0)::numeric(6,2) FROM (
             SELECT session_id, COUNT(*) FILTER (WHERE role IN ('user','assistant')) AS cnt
             FROM message
@@ -175,6 +181,7 @@ def list_daily(db: Session, *, start: date, end: date, include_today: bool = Tru
     """)
     rows = db.execute(sql, {"start": start}).mappings().all()
     return [DailyDashboard(**r) for r in rows]
+
 
 
 def window_averages(db: Session, *, days: int) -> Dict[str, float]:
