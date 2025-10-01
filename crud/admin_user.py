@@ -23,15 +23,15 @@ def list_users(
     offset: int = 0,
     limit: int = 50,
     department: Optional[str] = None,
-    q: Optional[str] = None,  # name/email 부분검색
+    search: Optional[str] = None,  # name/email 부분검색
 ) -> List[AdminUser]:
     stmt = select(AdminUser).order_by(AdminUser.id.asc())
 
     if department:
         stmt = stmt.where(AdminUser.department == department)
 
-    if q:
-        like = f"%{q}%"
+    if search:
+        like = f"%{search}%"
         stmt = stmt.where((AdminUser.name.ilike(like)) | (AdminUser.email.ilike(like)))
 
     stmt = stmt.offset(offset).limit(min(limit, 100))

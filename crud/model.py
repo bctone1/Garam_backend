@@ -26,7 +26,7 @@ def list_models(
     limit: int = 50,
     provider_name: Optional[str] = None,
     is_active: Optional[bool] = None,
-    q: Optional[str] = None,  # name/description 검색
+    search: Optional[str] = None,  # name/description 검색
     order_by: OrderBy = "recent",
 ) -> List[Model]:
     # stmt 는 statement의 줄임말 SQL Alechemy의 select 객체
@@ -36,8 +36,8 @@ def list_models(
         stmt = stmt.where(Model.provider_name == provider_name)
     if is_active is not None:
         stmt = stmt.where(Model.is_active.is_(is_active))
-    if q:
-        like = f"%{q}%"
+    if search:
+        like = f"%{search}%"
         stmt = stmt.where(Model.name.ilike(like) | Model.description.ilike(like))
 
     if order_by == "accuracy":
