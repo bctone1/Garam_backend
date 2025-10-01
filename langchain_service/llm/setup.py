@@ -1,6 +1,6 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+# from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
+# from langchain_anthropic import ChatAnthropic
 from core.tools import fit_anthropic_model
 import core.config as config
 from pydantic import SecretStr
@@ -16,21 +16,21 @@ def get_llm(provider="openai", model = None, api_key : str = None, temperature =
             model_name=model_name,
             temperature = temperature
         )
-    elif provider == "anthropic":
-        model_name = model or "claude-3-sonnet-20240229"
-        model_name = fit_anthropic_model(model_name=model_name)
-        return ChatAnthropic(
-            anthropic_api_key = SecretStr(api_key or ""),
-            model = model_name,
-            temperature = temperature
-        )
-    elif provider == "google":
-        model_name = model or  "gemini-2.5-pro"
-        return ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key = config.GOOGLE_API,
-            temperature=temperature
-        )
+    # elif provider == "anthropic":
+    #     model_name = model or "claude-3-sonnet-20240229"
+    #     model_name = fit_anthropic_model(model_name=model_name)
+    #     return ChatAnthropic(
+    #         anthropic_api_key = SecretStr(api_key or ""),
+    #         model = model_name,
+    #         temperature = temperature
+    #     )
+    # elif provider == "google":
+    #     model_name = model or  "gemini-2.5-pro"
+    #     return ChatGoogleGenerativeAI(
+    #         model=model_name,
+    #         google_api_key = config.GOOGLE_API,
+    #         temperature=temperature
+    #     )
 
 
     elif provider in ("friendli", "lgai"):
