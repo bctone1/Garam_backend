@@ -21,7 +21,7 @@ VECTOR_DIM = 1536
 # -------- ChatSession --------
 @router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
 def create_session(payload: ChatSessionCreate, db: Session = Depends(get_db)):
-    return crud.create_session(db, payload.dict())
+    return crud.create_session(db, payload.model_dump())
 
 @router.get("/sessions", response_model=list[ChatSessionResponse])
 def list_sessions(
@@ -45,7 +45,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/sessions/{session_id}", response_model=ChatSessionResponse)
 def update_session(session_id: int, payload: ChatSessionUpdate, db: Session = Depends(get_db)):
-    obj = crud.update_session(db, session_id, payload.dict(exclude_unset=True))
+    obj = crud.update_session(db, session_id, payload.model_dump(exclude_unset=True))
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
     return obj
@@ -76,19 +76,31 @@ class MessageCreateIn(MessageCreate):
     # vector_memory가 없으면 0 벡터로 채움(임시 저장용)
     vector_memory: Optional[List[float]] = Field(default=None, description="1536-dim vector")
 
+
 @router.post("/sessions/{session_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 def create_message(session_id: int, payload: MessageCreateIn, db: Session = Depends(get_db)):
     if not crud.get_session(db, session_id):
         raise HTTPException(status_code=404, detail="session not found")
-    vec = payload.vector_memory if payload.vector_memory is not None else [0.0] * VECTOR_DIM
+
+    role = payload.role  # type: ignore[arg-type]
+
+    if role == "assistant":
+        vec = None
+    else:  # user
+        if payload.vector_memory is None:
+            raise HTTPException(status_code=400, detail="vector_memory required for user messages")
+        if len(payload.vector_memory) != VECTOR_DIM or not all(isinstance(x, (int, float)) for x in payload.vector_memory):
+            raise HTTPException(status_code=400, detail=f"vector_memory must be length {VECTOR_DIM} of numbers")
+        vec = [float(x) for x in payload.vector_memory]
+
     return crud.create_message(
         db,
         session_id=session_id,
-        role=payload.role,            # type: ignore[arg-type]
+        role=role,
         content=payload.content,
         vector_memory=vec,
-        response_latency_ms=payload.response_latency_ms,
-        extra_data=payload.extra_data,  # type: ignore[arg-type]
+        response_latency_ms=payload.response_latency_ms or 0,
+        extra_data=payload.extra_data,  # None 또는 JSON
     )
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
