@@ -14,6 +14,8 @@ from schemas.chat import (
     MessageCreate, MessageResponse,
     FeedbackCreate, FeedbackResponse,
 )
+
+from langchain_service.embedding.get_vector import text_to_vector
 router = APIRouter(prefix="/chat", tags=["Chat"])
 VECTOR_DIM = 1536
 
@@ -24,6 +26,10 @@ def create_session(payload: ChatSessionCreate, db: Session = Depends(get_db)):
     return crud.create_session(db, payload.model_dump())
 
 
+def _recompute_job():
+    with SessionLocal() as db:
+        recompute_model_metrics(db)
+
 @router.post("/sessions/{session_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 def create_message(
     session_id: int,
@@ -31,38 +37,43 @@ def create_message(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    # 세션 확인
     if not crud.get_session(db, session_id):
         raise HTTPException(status_code=404, detail="session not found")
 
     role = payload.role  # type: ignore[arg-type]
 
-    # 벡터 검증
-    if role == "assistant":
-        vec = None
-    else:
-        if payload.vector_memory is None:
-            raise HTTPException(status_code=400, detail="vector_memory required for user messages")
-        if len(payload.vector_memory) != VECTOR_DIM or not all(isinstance(x, (int, float)) for x in payload.vector_memory):
+    if role == "user":
+        vec = payload.vector_memory or text_to_vector(payload.content)
+        # 검증
+        if not isinstance(vec, list) or len(vec) != VECTOR_DIM or not all(isinstance(x, (int, float)) for x in vec):
             raise HTTPException(status_code=400, detail=f"vector_memory must be length {VECTOR_DIM} of numbers")
-        vec = [float(x) for x in payload.vector_memory]
+        latency = None
+    elif role == "assistant":
+        vec = None
+        if payload.response_latency_ms is None:
+            raise HTTPException(status_code=400, detail="response_latency_ms required for assistant messages")
+        latency = int(payload.response_latency_ms)
+    else:
+        raise HTTPException(status_code=400, detail="invalid role")
 
-    # 저장
+    # 'null' 문자열 방지
+    extra = None if (isinstance(payload.extra_data, str) and payload.extra_data.lower() == "null") else payload.extra_data
+
     obj = crud.create_message(
         db,
         session_id=session_id,
         role=role,
         content=payload.content,
         vector_memory=vec,
-        response_latency_ms=payload.response_latency_ms or 0,
-        extra_data=payload.extra_data,  # None 또는 실제 JSON
+        response_latency_ms=latency,
+        extra_data=extra,
     )
 
-    # 메트릭 재계산 트리거
-    if obj.role == "assistant":
+    if role == "assistant":
         background_tasks.add_task(_recompute_job)
 
     return obj
+
 
 @router.get("/sessions", response_model=list[ChatSessionResponse])
 def list_sessions(
