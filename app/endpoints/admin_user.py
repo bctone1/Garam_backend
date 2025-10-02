@@ -21,7 +21,8 @@ def list_users(
     q: str | None = Query(None, description="search by name/email"),
     db: Session = Depends(get_db),
 ):
-    return crud.list_users(db, offset=offset, limit=limit, department=department, q=q)
+    # return crud.list_users(db, offset=offset, limit=limit, department=department, q=q)
+    return crud.list_users(db, offset=offset, limit=limit, department=department)
 
 
 @router.get("/{user_id}", response_model=AdminUserResponse)
