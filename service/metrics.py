@@ -16,7 +16,16 @@ def recompute_model_metrics(db: Session) -> None:
     """)).scalar() or 0
 
     accuracy = db.execute(text("""
-        SELECT COALESCE(AVG(CASE WHEN rating >= 4 THEN 1 ELSE 0 END) * 100, 0)
+        SELECT COALESCE(
+          AVG(
+            CASE
+              WHEN rating ~ '^[0-9]+(\\.[0-9]+)?$' AND rating::numeric >= 4 THEN 1
+              WHEN rating ILIKE 'helpful' THEN 1
+              WHEN rating ILIKE 'unhelpful' THEN 0
+              ELSE NULL
+            END
+          ) * 100, 0
+        )
         FROM feedback
         WHERE created_at >= date_trunc('month', now())
     """)).scalar() or 0
