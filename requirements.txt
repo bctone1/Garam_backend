@@ -4,6 +4,7 @@ aiofiles
 
 python-dotenv
 python-multipart
+pypdf
 
 SQLAlchemy
 alembic

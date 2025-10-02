@@ -40,7 +40,7 @@ class ChatSessionResponse(ChatSessionBase):
 # -------------------------------
 class MessageBase(BaseModel):
     session_id: int
-    role: str       # 'user' | 'bot'
+    role: str       # 'user' | 'assistant'
     content: str
     response_latency_ms: Optional[int] = None
     extra_data: Optional[Any] = None

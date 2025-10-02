@@ -1,62 +1,47 @@
-# Pydantic 스키마 (요청/응답)
-
+# schemas/model.py
+from __future__ import annotations
 from pydantic import BaseModel, Field
+from typing import Optional, Literal
 from datetime import datetime
-from typing import Optional, Literal, List, Union
 
 ResponseStyle = Literal["professional", "friendly", "concise"]
-FeatureItem = Union[dict, str, int, float, bool]
-
-class ModelBase(BaseModel):
-    name: str
-    provider_name: str
-    description: str
-    features: List[FeatureItem] = Field(default_factory=list)
-
-    is_active: bool = False
-    status_text: str
-
-    accuracy: float = Field(0, ge=0, le=100)
-    avg_response_time_ms: int = Field(0, ge=0)
-    month_conversations: int = Field(0, ge=0)
-    uptime_percent: float = Field(0, ge=0, le=100)
-
-    response_style: ResponseStyle = "professional"
-    block_inappropriate: bool = False
-    restrict_non_tech: bool = False
-    fast_response_mode: bool = False
-    suggest_agent_handoff: bool = False
-
-
-class ModelCreate(ModelBase):
-    pass
 
 
 class ModelUpdate(BaseModel):
+    # 일반 설정
     name: Optional[str] = None
-    provider_name: Optional[str] = None
-    description: Optional[str] = None
-    features: Optional[List[FeatureItem]] = None
-
-    is_active: Optional[bool] = None
-    status_text: Optional[str] = None
-
-    accuracy: Optional[float] = Field(default=None, ge=0, le=100)
-    avg_response_time_ms: Optional[int] = Field(default=None, ge=0)
-    month_conversations: Optional[int] = Field(default=None, ge=0)
-    uptime_percent: Optional[float] = Field(default=None, ge=0, le=100)
-
     response_style: Optional[ResponseStyle] = None
     block_inappropriate: Optional[bool] = None
     restrict_non_tech: Optional[bool] = None
     fast_response_mode: Optional[bool] = None
     suggest_agent_handoff: Optional[bool] = None
 
+    # 지표(원한다면 일반 업데이트에서도 허용)
+    accuracy: Optional[float] = Field(default=None, ge=0, le=100)
+    avg_response_time_ms: Optional[int] = Field(default=None, ge=0)
+    month_conversations: Optional[int] = Field(default=None, ge=0)
+    uptime_percent: Optional[float] = Field(default=None, ge=0, le=100)
 
-class ModelResponse(ModelBase):
+
+class ModelResponse(BaseModel):
     id: int
+    name: str
+
+    # 지표
+    accuracy: float
+    avg_response_time_ms: int
+    month_conversations: int
+    uptime_percent: float
+
+    # 응답 스타일/품질
+    response_style: ResponseStyle
+    block_inappropriate: bool
+    restrict_non_tech: bool
+    fast_response_mode: bool
+    suggest_agent_handoff: bool
+
+    # 타임스탬프
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}  # Pydantic v2

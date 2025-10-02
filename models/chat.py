@@ -45,11 +45,11 @@ class Message(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     session_id = Column(BigInteger, ForeignKey("chat_session.id", ondelete="CASCADE"), nullable=False)
 
-    role = Column(String, nullable=False)                 # 'user' | 'bot'
+    role = Column(String, nullable=False)                 # 'user' | 'assistant'
     content = Column(Text, nullable=False)
-    response_latency_ms = Column(Integer)                 # bot 메시지에만 채움
-    vector_memory = Column(Vector(1536), nullable=False)  # pgvector
-    extra_data = Column(JSON)
+    response_latency_ms = Column(Integer)                 # assistant 메시지에만 채움
+    vector_memory = Column(Vector(1536), nullable=True)  # pgvector
+    extra_data = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # 관계
@@ -60,10 +60,10 @@ class Message(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("role IN ('user','bot')", name="chk_message_role"),
+        CheckConstraint("role IN ('user','assistant')", name="chk_message_role"),
         CheckConstraint(
             "(role = 'user' AND response_latency_ms IS NULL) OR "
-            "(role = 'bot' AND (response_latency_ms IS NULL OR response_latency_ms >= 0))",
+            "(role = 'assistant' AND (response_latency_ms IS NULL OR response_latency_ms >= 0))",
             name="chk_message_latency_rule",
         ),
         Index("idx_message_session_created", "session_id", "created_at"),

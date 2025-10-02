@@ -3,12 +3,12 @@ from datetime import datetime, timezone, timedelta, date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy.orm import Session
-from crud import daily_dashboard as crud
-from schemas.daily_dashboard import DailyDashboardResponse, WindowAveragesResponse, UpsertPayload
+from crud import daily_dashboard, analytics
 
+from schemas.daily_dashboard import DailyDashboardResponse, WindowAveragesResponse, UpsertPayload
 from database.session import get_db
-from crud import analytics as crud
 from schemas.analytics import DashboardMetricsResponse, InquiryStats, DailyPoint, HourlyPoint, ModelStat
+from service.metrics import recompute_model_metrics
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -26,7 +26,7 @@ def dashboard_metrics(
     db: Session = Depends(get_db),
 ):
     # 대시보드 핵심 지표 집계: 세션 수, 평균 응답(ms), 만족도, 문의 처리현황, 평균 턴수, 세션 해결률
-    data = crud.get_dashboard_metrics(db, start=_parse_dt(start), end=_parse_dt(end))
+    data = analytics.get_dashboard_metrics(db, start=_parse_dt(start), end=_parse_dt(end))
     return DashboardMetricsResponse(
         total_sessions=data["total_sessions"],
         avg_response_ms=data["avg_response_ms"],
@@ -45,7 +45,7 @@ def daily_timeseries(
     db: Session = Depends(get_db)):
 
     # 날짜별 건수/지표 포인트 배열 반환(프론트 라인차트용)
-    return [DailyPoint(**p) for p in crud.get_daily_timeseries(db, days=days)]
+    return [DailyPoint(**p) for p in analytics.get_daily_timeseries(db, days=days)]
 
 
 @router.get("/timeseries/hourly", response_model=List[HourlyPoint])
@@ -55,7 +55,7 @@ def hourly_usage(
     db: Session = Depends(get_db)):
 
     # 시간대별 평균 또는 총합 포인트 배열 반환(히트맵/바차트용)
-    return [HourlyPoint(**p) for p in crud.get_hourly_usage(db, days=days)]
+    return [HourlyPoint(**p) for p in analytics.get_hourly_usage(db, days=days)]
 
 
 # 상위 N개 모델 성능/사용량 순위. 기본 10개, 최대 100개
@@ -65,13 +65,13 @@ def model_stats(
     db: Session = Depends(get_db),
 ):
     # 모델별 통계(정확도, 평균응답(ms), 월 대화량, 가동률 등) 반환
-    return [ModelStat(**r) for r in crud.get_model_stats(db, limit=limit)]
+    return [ModelStat(**r) for r in analytics.get_model_stats(db, limit=limit)]
 
 
 
 @router.post("/daily/upsert", status_code=status.HTTP_204_NO_CONTENT)
 def upsert_daily(payload: UpsertPayload, db: Session = Depends(get_db)):
-    crud.upsert_daily_dashboard(db, start=payload.start, end=payload.end)
+    daily_dashboard.upsert_daily_dashboard(db, start=payload.start, end=payload.end)
     return
 
 @router.get("/daily", response_model=List[DailyDashboardResponse])
@@ -83,7 +83,7 @@ def get_daily(
 ):
     s = date.fromisoformat(start)
     e = date.fromisoformat(end)
-    items = crud.list_daily(db, start=s, end=e, include_today=include_today)
+    items = daily_dashboard.list_daily(db, start=s, end=e, include_today=include_today)
     return [DailyDashboardResponse.model_validate(i) for i in items]
 
 @router.get("/windows", response_model=WindowAveragesResponse)
@@ -91,7 +91,11 @@ def get_window(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
 ):
-    data = crud.window_averages(db, days=days)
+    data = daily_dashboard.window_averages(db, days=days)
     return WindowAveragesResponse(**data)
 
+@router.post("/metrics/recompute")
+def recompute(db: Session = Depends(get_db)):
+    recompute_model_metrics(db)
+    return {"ok": True}
 

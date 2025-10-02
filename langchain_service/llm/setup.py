@@ -1,56 +1,76 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+# from langchain_google_genai import ChatGoogleGenerativeAI
+import os
 from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
-from core.tools import fit_anthropic_model
+
 import core.config as config
 from pydantic import SecretStr
-from openai import OpenAI
-import os
+
 
 # 테스트용 openai 와 실제 서비스는 Exaone 이용
-def get_llm(provider="openai", model = None, api_key : str = None, temperature = 0.7):
-    if provider == "openai":
-        model_name = model or config.DEFAULT_CHAT_MODEL
-        return ChatOpenAI(
-            api_key = api_key,
-            model_name=model_name,
-            temperature = temperature
-        )
-    elif provider == "anthropic":
-        model_name = model or "claude-3-sonnet-20240229"
-        model_name = fit_anthropic_model(model_name=model_name)
-        return ChatAnthropic(
-            anthropic_api_key = SecretStr(api_key or ""),
-            model = model_name,
-            temperature = temperature
-        )
-    elif provider == "google":
-        model_name = model or  "gemini-2.5-pro"
-        return ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key = config.GOOGLE_API,
-            temperature=temperature
-        )
+DEFAULT_MODEL = getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini")
+FRIENDLI_MODEL = "LGAI-EXAONE/EXAONE-4.0.1-32B"
+FRIENDLI_BASE = "https://api.friendli.ai/serverless/v1"
 
+
+def _pick_key(*candidates):
+    for key in candidates:
+        if key:
+            return key
+    return None
+
+
+def get_llm(provider: str = "openai", model: str | None = None,
+            api_key: str | None = None, temperature: float = 0.7):
+    if provider == "openai":
+        key = _pick_key(api_key, getattr(config, "OPENAI_API", None),
+                        getattr(config, "DEFAULT_API_KEY", None),
+                        os.getenv("OPENAI_API_KEY"))
+        if not key:
+            raise RuntimeError("OPENAI_API 키가 설정되지 않았습니다.")
+        return ChatOpenAI(
+            model=model or DEFAULT_MODEL,
+            api_key=key,
+            temperature=temperature,
+        )
 
     elif provider in ("friendli", "lgai"):
-        model_name = model or "LGAI-EXAONE/EXAONE-4.0.1-32B"
+        key = _pick_key(api_key, getattr(config, "FRIENDLI_API", None))
+        if not key:
+            raise RuntimeError("FRIENDLI_API 키가 설정되지 않았습니다.")
         return ChatOpenAI(
-            api_key=config.FRIENDLI_API,
-            model =model_name ,  # (endpoint_id)
-            base_url="https://api.friendli.ai/serverless/v1",
-            temperature=temperature
+            model=model or FRIENDLI_MODEL,   # endpoint_id
+            api_key=key,
+            base_url=FRIENDLI_BASE,
+            temperature=temperature,
         )
+
     else:
         raise ValueError(f"지원되지 않는 제공자: {provider}")
 
 
-def get_backend_agent(provider="openai", model=None):
+def get_backend_agent(provider: str = "openai", model: str | None = None):
     if provider == "openai":
-        model_name = model or config.DEFAULT_CHAT_MODEL
+        key = _pick_key(getattr(config, "EMBEDDING_API", None),
+                        getattr(config, "OPENAI_API", None),
+                        os.getenv("OPENAI_API_KEY"))
+        if not key:
+            raise RuntimeError("EMBEDDING_API/OPENAI_API 키가 설정되지 않았습니다.")
         return ChatOpenAI(
-            openai_api_key=config.EMBEDDING_API,
-            model_name=model_name,
-            temperature=0.7
+            model=model or DEFAULT_MODEL,
+            api_key=key,
+            temperature=0.7,
         )
 
+    elif provider in ("friendli", "lgai"):
+        key = getattr(config, "FRIENDLI_API", None)
+        if not key:
+            raise RuntimeError("FRIENDLI_API 키가 설정되지 않았습니다.")
+        return ChatOpenAI(
+            model=model or FRIENDLI_MODEL,
+            api_key=key,
+            base_url=FRIENDLI_BASE,
+            temperature=0.7,
+        )
+
+    else:
+        raise ValueError(f"지원되지 않는 제공자: {provider}")

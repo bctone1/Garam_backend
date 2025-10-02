@@ -10,14 +10,14 @@ class DailyDashboard(Base):
     weekday = Column(SmallInteger, nullable=False, comment="ISO 1=월..7=일")
 
     sessions_total = Column(Integer, nullable=False, default=0)
-    sessions_with_bot = Column(Integer, nullable=False, default=0)
+    sessions_with_assistant = Column(Integer, nullable=False, default=0)
     sessions_resolved = Column(Integer, nullable=False, default=0)
 
     messages_total = Column(Integer, nullable=False, default=0)
 
     avg_response_ms = Column(Numeric(10, 2), nullable=False, default=0)
 
-    # Bot  응답 지연 시간의 중앙값
+    # assistant  응답 지연 시간의 중앙값
     p50_response_ms = Column(Numeric(10, 2), nullable=False, default=0)
 
     # 간헐적 지연 탐지

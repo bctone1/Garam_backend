@@ -27,6 +27,6 @@ def build_system_prompt(style: Style, **flags) -> str:
     ])
 
 
-def llm_params(fast_response_mode: bool) -> dict:
-    # 필요 시 조정
-    return {"temperature": 0.2, "max_tokens": 512} if fast_response_mode else {"temperature": 0.3}
+def llm_params(fast: bool) -> dict:
+    # 프로젝트 get_llm 시그니처 기준 최소 파라미터
+    return {"temperature": 0.3 if fast else 0.7}
