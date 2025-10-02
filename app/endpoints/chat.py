@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from database.session import get_db
+from service.metrics import recompute_model_metrics
+from database.session import get_db, SessionLocal
 from crud import chat as crud
 from schemas.chat import (
     ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse,
     MessageCreate, MessageResponse,
     FeedbackCreate, FeedbackResponse,
 )
-
 router = APIRouter(prefix="/chat", tags=["Chat"])
 VECTOR_DIM = 1536
 
@@ -22,6 +22,47 @@ VECTOR_DIM = 1536
 @router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
 def create_session(payload: ChatSessionCreate, db: Session = Depends(get_db)):
     return crud.create_session(db, payload.model_dump())
+
+
+@router.post("/sessions/{session_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def create_message(
+    session_id: int,
+    payload: MessageCreateIn,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    # 세션 확인
+    if not crud.get_session(db, session_id):
+        raise HTTPException(status_code=404, detail="session not found")
+
+    role = payload.role  # type: ignore[arg-type]
+
+    # 벡터 검증
+    if role == "assistant":
+        vec = None
+    else:
+        if payload.vector_memory is None:
+            raise HTTPException(status_code=400, detail="vector_memory required for user messages")
+        if len(payload.vector_memory) != VECTOR_DIM or not all(isinstance(x, (int, float)) for x in payload.vector_memory):
+            raise HTTPException(status_code=400, detail=f"vector_memory must be length {VECTOR_DIM} of numbers")
+        vec = [float(x) for x in payload.vector_memory]
+
+    # 저장
+    obj = crud.create_message(
+        db,
+        session_id=session_id,
+        role=role,
+        content=payload.content,
+        vector_memory=vec,
+        response_latency_ms=payload.response_latency_ms or 0,
+        extra_data=payload.extra_data,  # None 또는 실제 JSON
+    )
+
+    # 메트릭 재계산 트리거
+    if obj.role == "assistant":
+        background_tasks.add_task(_recompute_job)
+
+    return obj
 
 @router.get("/sessions", response_model=list[ChatSessionResponse])
 def list_sessions(
@@ -73,12 +114,19 @@ def delete_session(session_id: int, db: Session = Depends(get_db)):
 
 # -------- Message --------
 class MessageCreateIn(MessageCreate):
-    # vector_memory가 없으면 0 벡터로 채움(임시 저장용)
     vector_memory: Optional[List[float]] = Field(default=None, description="1536-dim vector")
 
+def _recompute_job():
+    with SessionLocal() as db:
+        recompute_model_metrics(db)
 
 @router.post("/sessions/{session_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-def create_message(session_id: int, payload: MessageCreateIn, db: Session = Depends(get_db)):
+def create_message(
+    session_id: int,
+    payload: MessageCreateIn,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     if not crud.get_session(db, session_id):
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -86,22 +134,26 @@ def create_message(session_id: int, payload: MessageCreateIn, db: Session = Depe
 
     if role == "assistant":
         vec = None
-    else:  # user
+    else:
         if payload.vector_memory is None:
             raise HTTPException(status_code=400, detail="vector_memory required for user messages")
         if len(payload.vector_memory) != VECTOR_DIM or not all(isinstance(x, (int, float)) for x in payload.vector_memory):
             raise HTTPException(status_code=400, detail=f"vector_memory must be length {VECTOR_DIM} of numbers")
         vec = [float(x) for x in payload.vector_memory]
 
-    return crud.create_message(
+    obj = crud.create_message(
         db,
         session_id=session_id,
         role=role,
         content=payload.content,
         vector_memory=vec,
         response_latency_ms=payload.response_latency_ms or 0,
-        extra_data=payload.extra_data,  # None 또는 JSON
+        extra_data=payload.extra_data,
     )
+    if obj.role == "assistant":
+        background_tasks.add_task(_recompute_job)
+    return obj
+
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
 def list_messages(
