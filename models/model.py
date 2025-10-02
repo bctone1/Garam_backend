@@ -21,10 +21,10 @@ class Model(Base):
     response_style = Column(Text, nullable=False, server_default=text("'professional'"))
 
     # 응답 품질 설정
-    block_inappropriate = Column(Boolean, nullable=False, server_default=text("false"))
-    restrict_non_tech = Column(Boolean, nullable=False, server_default=text("false"))
-    fast_response_mode = Column(Boolean, nullable=False, server_default=text("false"))
-    suggest_agent_handoff = Column(Boolean, nullable=False, server_default=text("false"))
+    block_inappropriate = Column(Boolean, nullable=False, server_default=text("true"))
+    restrict_non_tech = Column(Boolean, nullable=False, server_default=text("true"))
+    fast_response_mode = Column(Boolean, nullable=False, server_default=text("true"))
+    suggest_agent_handoff = Column(Boolean, nullable=False, server_default=text("true"))
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
