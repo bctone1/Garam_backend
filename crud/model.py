@@ -1,4 +1,4 @@
-# CRUD/model.py
+# CRUD
 from typing import Optional, Dict, Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
