@@ -29,10 +29,10 @@ def list_sessions(
     limit: int = Query(50, ge=1, le=100),
     resolved: Optional[bool] = Query(None),
     model_id: Optional[int] = Query(None),
-    q: Optional[str] = Query(None, description="search in title"),
+    search: Optional[str] = Query(None, description="search in title"),
     db: Session = Depends(get_db),
 ):
-    return crud.list_sessions(db, offset=offset, limit=limit, resolved=resolved, model_id=model_id, q=q)
+    return crud.list_sessions(db, offset=offset, limit=limit, resolved=resolved, model_id=model_id, search=search)
 
 
 @router.get("/sessions/{session_id}", response_model=ChatSessionResponse)

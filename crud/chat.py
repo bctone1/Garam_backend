@@ -26,15 +26,15 @@ def list_sessions(
     limit: int = 50,
     resolved: Optional[bool] = None,
     model_id: Optional[int] = None,
-    q: Optional[str] = None,  # title 검색
+    search: Optional[str] = None,  # title 검색
 ) -> List[ChatSession]:
     stmt = select(ChatSession).order_by(ChatSession.created_at.desc())
     if resolved is not None:
         stmt = stmt.where(ChatSession.resolved == resolved)
     if model_id is not None:
         stmt = stmt.where(ChatSession.model_id == model_id)
-    if q:
-        stmt = stmt.where(ChatSession.title.ilike(f"%{q}%"))
+    if search:
+        stmt = stmt.where(ChatSession.title.ilike(f"%{search}%"))
     stmt = stmt.offset(offset).limit(min(limit, 100))
     return db.execute(stmt).scalars().all()
 
@@ -51,8 +51,8 @@ def update_session(db: Session, session_id: int, data: Dict[str, Any]) -> Option
     obj = get_session(db, session_id)
     if not obj:
         return None
-    for k, v in data.items():
-        setattr(obj, k, v)
+    for key, value in data.items():
+        setattr(obj, key, value)
     db.add(obj)
     db.commit()
     db.refresh(obj)
