@@ -112,7 +112,7 @@ def create_message(
     session_id: int,
     role: Role,
     content: str,
-    vector_memory: List[float],
+    vector_memory: Optional[List[float]],
     response_latency_ms: Optional[int] = None,
     extra_data: Optional[dict] = None,
 ) -> Message:
