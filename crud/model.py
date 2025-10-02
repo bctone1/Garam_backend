@@ -7,6 +7,7 @@ from models.model import Model
 SINGLE_ID = 1
 
 def get_single(db: Session) -> Optional[Model]:
+    # stmt 는 statement
     stmt = select(Model).where(Model.id == SINGLE_ID)
     return db.execute(stmt).scalar_one_or_none()
 
@@ -17,8 +18,8 @@ def update_single(db: Session, data: Dict[str, Any]) -> Optional[Model]:
         obj = Model(id=SINGLE_ID, **data)
         db.add(obj)
     else:
-        for k, v in data.items():
-            setattr(obj, k, v)
+        for key, value in data.items():
+            setattr(obj, key, value)
         db.add(obj)
     db.commit()
     db.refresh(obj)
