@@ -41,7 +41,6 @@ def recompute_model_metrics(db: Session) -> None:
 
     crud_model.update_metrics(
         db,
-        model_id=1,
         accuracy=float(accuracy),
         avg_response_time_ms=int(avg_ms),
         month_conversations=int(month_convs),
