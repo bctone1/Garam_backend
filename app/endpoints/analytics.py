@@ -8,6 +8,7 @@ from crud import daily_dashboard, analytics
 from schemas.daily_dashboard import DailyDashboardResponse, WindowAveragesResponse, UpsertPayload
 from database.session import get_db
 from schemas.analytics import DashboardMetricsResponse, InquiryStats, DailyPoint, HourlyPoint, ModelStat
+from service.metrics import recompute_model_metrics
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -93,4 +94,8 @@ def get_window(
     data = daily_dashboard.window_averages(db, days=days)
     return WindowAveragesResponse(**data)
 
+@router.post("/metrics/recompute")
+def recompute(db: Session = Depends(get_db)):
+    recompute_model_metrics(db)
+    return {"ok": True}
 
