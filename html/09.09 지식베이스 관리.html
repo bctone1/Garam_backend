@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>지식베이스 관리 - 가람포스텍시스템 AI 관리센터</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #1e60e1;
+            --primary-dark: #1a54c7;
+            --primary-light: rgba(30, 96, 225, 0.1);
+            --accent-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --secondary-color: #f8f9fa;
+            --bg-white: #ffffff;
+            --text-primary: #2c3e50;
+            --text-secondary: #6c757d;
+            --border-color: #e9ecef;
+            --border-radius: 6px;
+            --border-radius-lg: 12px;
+            --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+            --transition: all 0.2s ease-in-out;
+            --header-height: 80px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: #f8fafc;
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .admin-wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* 왼쪽 사이드바 */
+        .sidebar {
+            width: 280px;
+            background: #1e293b;
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .brand-logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            border-radius: var(--border-radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .brand-info {
+            flex: 1;
+        }
+
+        .brand-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            color: white;
+        }
+
+        .brand-subtitle {
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        .sidebar-nav {
+            padding: 1.5rem 0;
+            flex: 1;
+        }
+
+        .nav-menu {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 0.25rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            transition: var(--transition);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: #334155;
+            color: white;
+        }
+
+        .nav-link.active {
+            background: var(--primary-color);
+            color: white;
+            border-right: 3px solid var(--primary-light);
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 1.5rem;
+            border-top: 1px solid #334155;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: white;
+            font-size: 0.875rem;
+        }
+
+        .user-email {
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        .sidebar-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: #334155;
+            color: #cbd5e1;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .action-btn:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* 메인 콘텐트 */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            background: #f8fafc;
+        }
+
+        .top-header {
+            background: var(--bg-white);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            height: var(--header-height);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .page-title h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .page-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .status-tools {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 500;
+            background: rgba(148, 163, 184, 0.2);
+            color: var(--text-secondary);
+            transition: var(--transition);
+        }
+
+        .status-indicator .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--warning-color);
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.checking {
+            background: rgba(255, 193, 7, 0.15);
+            color: var(--warning-color);
+        }
+
+        .status-indicator.checking .status-dot {
+            background: var(--warning-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-indicator.connected {
+            background: var(--primary-light);
+            color: var(--primary-color);
+        }
+
+        .status-indicator.connected .status-dot {
+            background: var(--accent-color);
+        }
+
+        .status-indicator.disconnected {
+            background: rgba(220, 53, 69, 0.12);
+            color: var(--danger-color);
+        }
+
+        .status-indicator.disconnected .status-dot {
+            background: var(--danger-color);
+            animation: none;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--bg-white);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+        }
+
+        .btn-outline:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        /* 탭 네비게이션 */
+        .tab-navigation {
+            margin-bottom: 0;
+            padding: 0 2rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-white);
+            position: sticky;
+            top: var(--header-height);
+            z-index: 100;
+        }
+
+        .tab-container {
+            display: flex;
+            gap: 0;
+        }
+
+        .tab-btn {
+            padding: 1rem 2rem;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            border-bottom: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--primary-color);
+            background: rgba(30, 96, 225, 0.05);
+        }
+
+        .tab-btn.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            background: rgba(30, 96, 225, 0.05);
+        }
+
+        /* 탭 콘텐트 */
+        .tab-content {
+            display: none;
+            padding: 2rem;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        /* 업로드 영역 */
+        .upload-section {
+            margin-bottom: 2rem;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: var(--border-radius-lg);
+            padding: 2rem;
+            text-align: center;
+            background: var(--secondary-color);
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover,
+        .upload-area.drag-over {
+            border-color: var(--primary-color);
+            background: rgba(30, 96, 225, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .upload-text h3 {
+            font-size: 1.25rem;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-text p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+
+        .upload-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* 문서 목록 */
+        .documents-section {
+            background: var(--bg-white);
+            border-radius: var(--border-radius-lg);
+            padding: 0;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--secondary-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .section-header .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .section-header .header-left h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .document-count {
+            background: var(--primary-light);
+            color: var(--primary-color);
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 1rem;
+            color: var(--text-secondary);
+            z-index: 1;
+        }
+
+        .search-box input {
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            width: 250px;
+            font-size: 0.875rem;
+            transition: var(--transition);
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(30, 96, 225, 0.1);
+        }
+
+        .documents-table-wrapper {
+            overflow: hidden;
+        }
+
+        .documents-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .documents-table th,
+        .documents-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .documents-table th {
+            background: var(--secondary-color);
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            white-space: nowrap;
+        }
+
+        .documents-table tbody tr:hover {
+            background: rgba(30, 96, 225, 0.02);
+        }
+
+        .documents-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .document-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .document-icon {
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            flex-shrink: 0;
+        }
+
+        .document-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .document-name {
+            font-weight: 500;
+            display: block;
+            margin-bottom: 0.25rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .document-excerpt {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.active {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+        }
+
+        .status-badge.processing {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--warning-color);
+        }
+
+        /* 액션 버튼 */
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        .action-btn-small {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: var(--border-radius);
+            background: var(--secondary-color);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            font-size: 0.875rem;
+        }
+
+        .action-btn-small:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .action-btn-small.delete:hover {
+            background: var(--danger-color);
+        }
+
+        /* 체크박스 */
+        .document-checkbox,
+        #selectAllDocuments {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary-color);
+            cursor: pointer;
+        }
+
+        /* FAQ 리스트 */
+        .faq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .faq-item {
+            background: var(--bg-white);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .faq-item:hover {
+            box-shadow: var(--shadow-sm);
+        }
+
+        .faq-header {
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .faq-header:hover {
+            background: rgba(30, 96, 225, 0.02);
+        }
+
+        .faq-question {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex: 1;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .faq-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .faq-stats {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .faq-content {
+            display: none;
+            border-top: 1px solid var(--border-color);
+            padding: 1.5rem;
+            background: var(--secondary-color);
+        }
+
+        .faq-content.show {
+            display: block;
+        }
+
+        .faq-answer {
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .faq-meta {
+            display: flex;
+            gap: 2rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        /* 모달 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-container {
+            position: relative;
+            background: var(--bg-white);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-lg);
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .modal-close:hover {
+            background: var(--secondary-color);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+
+        /* 토스트 알림 */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: var(--border-radius);
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            max-width: 400px;
+            box-shadow: var(--shadow-md);
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.success {
+            background: var(--accent-color);
+        }
+
+        .toast.error {
+            background: var(--danger-color);
+        }
+
+        .toast.warning {
+            background: var(--warning-color);
+            color: var(--text-primary);
+        }
+
+        .toast.info {
+            background: var(--info-color);
+        }
+
+        /* 업로드 중 표시 */
+        .upload-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(30, 96, 225, 0.1);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 1rem;
+            border-radius: var(--border-radius-lg);
+        }
+
+        .upload-overlay.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(30, 96, 225, 0.3);
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* 애니메이션 */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 반응형 */
+        @media (max-width: 1024px) {
+            .main-content { margin-left: 0; }
+            .sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
+        }
+
+        @media (max-width: 768px) {
+            .top-header { flex-direction: column; gap: 1rem; padding: 1rem; height: auto; }
+            .tab-content { padding: 1rem; }
+            .header-right { flex-direction: column; align-items: stretch; gap: 0.75rem; width: 100%; }
+            .header-stats { flex-direction: column; gap: 1rem; text-align: center; }
+            .status-tools { width: 100%; flex-direction: column; align-items: stretch; gap: 0.5rem; }
+            .status-indicator { width: 100%; justify-content: center; }
+            .status-tools .btn { width: 100%; justify-content: center; }
+            .section-header { flex-direction: column; align-items: stretch; gap: 1rem; }
+            .header-actions { flex-direction: column; align-items: stretch; }
+            .search-box input { width: 100%; }
+            .documents-table-wrapper { overflow-x: auto; }
+            .documents-table { min-width: 800px; }
+            .modal-container { width: 95%; margin: 1rem; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin-wrapper">
+        <!-- 사이드바 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-logo">
+                    <i class="fas fa-microchip"></i>
+                </div>
+                <div class="brand-info">
+                    <h2 class="brand-name">가람포스텍</h2>
+                    <p class="brand-subtitle">AI 관리센터</p>
+                </div>
+            </div>
+
+             <nav class="sidebar-nav">
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                        <a href="09.09 대시보드.html" class="nav-link">
+                            <i class="fas fa-tachometer-alt"></i>
+                            <span class="nav-text">대시보드</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.09 지식베이스 관리.html" class="nav-link active">
+                            <i class="fas fa-book"></i>
+                            <span class="nav-text">지식베이스 관리</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.09 AI 모델 설정.html" class="nav-link">
+                            <i class="fas fa-robot"></i>
+                            <span class="nav-text">AI 모델 설정</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.09 분석 및 보고서.html" class="nav-link">
+                            <i class="fas fa-chart-bar"></i>
+                            <span class="nav-text">분석 및 보고서</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.09 챗봇 운영 설정.html" class="nav-link">
+                            <i class="fas fa-comments"></i>
+                            <span class="nav-text">챗봇 운영 설정</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.15 문의 관리.html" class="nav-link">
+                            <i class="fas fa-comments"></i>
+                            <span class="nav-text">문의 관리</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="user-avatar">
+                        <i class="fas fa-user-tie"></i>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">관리자</div>
+                        <div class="user-email">admin@garampos.com</div>
+                    </div>
+                </div>
+                <div class="sidebar-actions">
+                    <button class="action-btn" title="로그아웃">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 메인 콘텐트 -->
+        <main class="main-content">
+            <!-- 상단 헤더 -->
+            <header class="top-header">
+                <div class="header-left">
+                    <div class="page-title">
+                        <h1>지식베이스 관리</h1>
+                        <p class="page-subtitle">파일 업로드하면 즉시 챗봇에서 활용 가능합니다</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="header-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">활성 문서</span>
+                            <span class="stat-value" id="totalDocuments">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">FAQ</span>
+                            <span class="stat-value" id="totalFaqs">0</span>
+                        </div>
+                    </div>
+                    <div class="status-tools">
+                        <div class="status-indicator checking" id="apiStatusIndicator" role="status" aria-live="polite" data-status="checking" title="연결 상태 확인 중">
+                            <div class="status-dot"></div>
+                            <span id="apiStatusText">연결 확인 중...</span>
+                        </div>
+                        <button class="btn btn-secondary" type="button" id="apiCheckButton">
+                            <i class="fas fa-plug"></i>
+                            연결 확인
+                        </button>
+                        <button class="btn btn-secondary" type="button" id="apiSettingsButton">
+                            <i class="fas fa-gear"></i>
+                            API 설정
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 탭 네비게이션 -->
+            <section class="tab-navigation">
+                <div class="tab-container">
+                    <button class="tab-btn active" data-tab="documents">
+                        <i class="fas fa-file-upload"></i>
+                        문서 관리
+                    </button>
+                    <button class="tab-btn" data-tab="faq">
+                        <i class="fas fa-question-circle"></i>
+                        FAQ 관리
+                    </button>
+                </div>
+            </section>
+
+            <!-- 문서 관리 탭 -->
+            <section class="tab-content active" id="documentsTab">
+                <!-- 업로드 영역 -->
+                <div class="upload-section">
+                    <div class="upload-area" id="documentUploadArea" onclick="document.getElementById('documentFileInput').click()">
+                        <div class="upload-overlay" id="uploadOverlay">
+                            <div class="spinner"></div>
+                            <p style="color: var(--primary-color); font-weight: 500;">파일을 처리하고 있습니다...</p>
+                        </div>
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <div class="upload-text">
+                            <h3>파일을 드래그하거나 클릭해서 업로드</h3>
+                            <p>PDF, Word, 텍스트 파일 지원 • 업로드 즉시 챗봇에서 사용 가능</p>
+                        </div>
+                        <input type="file" id="documentFileInput" multiple accept=".pdf,.doc,.docx,.txt" style="display: none;">
+                        <div class="upload-buttons">
+                            <button class="btn btn-primary" onclick="document.getElementById('documentFileInput').click()">
+                                <i class="fas fa-file-upload"></i>
+                                파일 선택
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 업로드된 문서 목록 -->
+                <div class="documents-section">
+                    <div class="section-header">
+                        <div class="header-left">
+                            <h3>업로드된 문서</h3>
+                            <span class="document-count" id="documentCount">0개 문서</span>
+                        </div>
+                        <div class="header-actions">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" placeholder="문서 검색..." id="documentSearch" oninput="filterDocuments()">
+                            </div>
+                            <button class="btn btn-danger" onclick="bulkDeleteDocuments()">
+                                <i class="fas fa-trash"></i>
+                                선택 삭제
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="documents-table-wrapper">
+                        <table class="documents-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">
+                                        <input type="checkbox" id="selectAllDocuments" onchange="toggleAllDocuments(this.checked)">
+                                    </th>
+                                    <th style="width: auto; min-width: 300px;">문서명</th>
+                                    <th style="width: 100px;">크기</th>
+                                    <th style="width: 120px;">업로드일</th>
+                                    <th style="width: 100px;">상태</th>
+                                    <th style="width: 100px;">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="documentsTableBody">
+                                <!-- 문서 목록이 여기에 동적으로 로드됩니다 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FAQ 관리 탭 -->
+            <section class="tab-content" id="faqTab">
+                <div class="upload-section">
+                    <div class="upload-area" style="cursor: default; border-style: solid;">
+                        <div class="upload-icon">
+                            <i class="fas fa-question-circle"></i>
+                        </div>
+                        <div class="upload-text">
+                            <h3>새로운 FAQ를 추가하세요</h3>
+                            <p>고객이 자주 묻는 질문과 답변을 체계적으로 관리할 수 있습니다</p>
+                        </div>
+                        <div class="upload-buttons">
+                            <button class="btn btn-primary" onclick="showAddFaqModal()">
+                                <i class="fas fa-plus"></i>
+                                FAQ 추가
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="documents-section">
+                    <div class="section-header">
+                        <div class="header-left">
+                            <h3>FAQ 목록</h3>
+                            <span class="document-count" id="faqCount">0개 FAQ</span>
+                        </div>
+                        <div class="header-actions">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" placeholder="FAQ 검색..." id="faqSearch" oninput="filterFaqs()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="padding: 2rem;">
+                        <div class="faq-list" id="faqList">
+                            <!-- FAQ 항목이 동적으로 렌더링됩니다 -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- FAQ 추가 모달 -->
+        <div class="modal" id="faqAddModal" style="display: none;">
+            <div class="modal-backdrop" onclick="closeFaqAddModal()"></div>
+            <div class="modal-container" style="max-width: 700px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">새 FAQ 추가</h3>
+                    <button class="modal-close" onclick="closeFaqAddModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                                질문 <span style="color: var(--danger-color);">*</span>
+                            </label>
+                            <input type="text" id="faqQuestion" placeholder="자주 묻는 질문을 입력하세요..." 
+                                   style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); font-size: 1rem;">
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                                답변 <span style="color: var(--danger-color);">*</span>
+                            </label>
+                            <textarea id="faqAnswer" placeholder="상세한 답변을 입력하세요..." rows="6"
+                                      style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); font-size: 1rem; resize: vertical; font-family: inherit;"></textarea>
+                        </div>
+
+                        <div style="background: var(--secondary-color); padding: 1rem; border-radius: var(--border-radius); border-left: 4px solid var(--primary-color);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <i class="fas fa-lightbulb" style="color: var(--primary-color);"></i>
+                                <strong style="color: var(--text-primary);">작성 팁</strong>
+                            </div>
+                            <ul style="margin: 0; padding-left: 1.2rem; color: var(--text-secondary); font-size: 0.875rem; line-height: 1.4;">
+                                <li>구체적이고 명확한 질문으로 작성해주세요</li>
+                                <li>답변은 단계별로 나누어 설명하면 좋습니다</li>
+                                <li>필요시 연락처 정보를 포함해주세요</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeFaqAddModal()">취소</button>
+                    <button class="btn btn-primary" onclick="submitNewFaq()">
+                        <i class="fas fa-plus"></i>
+                        FAQ 추가
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_STORAGE_KEY = 'garam_api_base_url';
+
+        function getDefaultApiBaseUrl() {
+            try {
+                const { origin, protocol } = window.location;
+                if (origin && /^https?:/i.test(protocol)) {
+                    return origin.replace(/\/$/, '');
+                }
+            } catch (error) {
+                console.warn('기본 API 주소 감지 실패:', error);
+            }
+            return 'http://localhost:5000';
+        }
+
+        const DEFAULT_API_BASE_URL = getDefaultApiBaseUrl();
+
+        let API_BASE_URL = localStorage.getItem(API_STORAGE_KEY) || DEFAULT_API_BASE_URL;
+
+        function normalizeApiBaseUrl(value) {
+            const raw = (value || '').trim();
+            if (!raw) {
+                throw new Error('API 기본 주소를 입력해주세요.');
+            }
+            let candidate = raw;
+            if (!/^https?:\/\//i.test(candidate)) {
+                candidate = `http://${candidate}`;
+            }
+            const url = new URL(candidate);
+            const pathname = url.pathname.replace(/\/+$/, '');
+            const normalizedPath = pathname === '/' ? '' : pathname;
+            return `${url.origin}${normalizedPath}`;
+        }
+
+        function setApiBaseUrl(newUrl, options = {}) {
+            const { persist = true } = options;
+            const normalized = normalizeApiBaseUrl(newUrl);
+            API_BASE_URL = normalized;
+            if (persist) {
+                localStorage.setItem(API_STORAGE_KEY, normalized);
+            }
+            return normalized;
+        }
+
+        async function fetchJSON(url, options = {}) {
+            const opts = { ...options };
+            opts.headers = { ...(options.headers || {}) };
+
+            if (opts.body && !(opts.body instanceof FormData) && typeof opts.body !== 'string') {
+                if (!opts.headers['Content-Type']) {
+                    opts.headers['Content-Type'] = 'application/json';
+                }
+                opts.body = JSON.stringify(opts.body);
+            }
+
+            try {
+                const response = await fetch(url, opts);
+                const text = await response.text();
+
+                if (!response.ok) {
+                    let message = `HTTP ${response.status}`;
+                    if (text) {
+                        try {
+                            const parsed = JSON.parse(text);
+                            if (parsed?.detail) {
+                                message = parsed.detail;
+                            } else if (parsed?.message) {
+                                message = parsed.message;
+                            }
+                        } catch (parseError) {
+                            message = text;
+                        }
+                    }
+                    const error = new Error(message);
+                    error.status = response.status;
+                    throw error;
+                }
+
+                if (!text) {
+                    return null;
+                }
+
+                try {
+                    return JSON.parse(text);
+                } catch (parseError) {
+                    return null;
+                }
+            } catch (error) {
+                if (error instanceof Error) {
+                    throw error;
+                }
+                const fallback = new Error('네트워크 오류가 발생했습니다.');
+                fallback.status = 0;
+                throw fallback;
+            }
+        }
+
+        function updateApiStatus(status, message) {
+            const indicator = document.getElementById('apiStatusIndicator');
+            const text = document.getElementById('apiStatusText');
+            if (!indicator || !text) {
+                return;
+            }
+            indicator.classList.remove('connected', 'disconnected', 'checking');
+            indicator.classList.add(status);
+            indicator.setAttribute('data-status', status);
+            indicator.setAttribute('aria-label', `API 상태: ${message}`);
+            indicator.setAttribute('title', `API 기본 주소: ${API_BASE_URL}`);
+            text.textContent = message;
+        }
+
+        async function checkApiConnection(options = {}) {
+            const { showSuccessToast = false, suppressErrorToast = false } = options;
+            updateApiStatus('checking', '연결 확인 중...');
+            try {
+                await fetchJSON(`${API_BASE_URL}/knowledge?limit=1`);
+                updateApiStatus('connected', '연결됨');
+                if (showSuccessToast) {
+                    showToast('지식베이스 API 연결이 확인되었습니다.', 'success');
+                }
+                return true;
+            } catch (error) {
+                let message = error instanceof Error ? error.message : '백엔드 연결에 실패했습니다.';
+                if (/failed to fetch/i.test(message) || /network/i.test(message)) {
+                    message = '서버에 연결할 수 없습니다. 주소와 네트워크 상태를 확인해주세요.';
+                }
+                updateApiStatus('disconnected', message);
+                if (!suppressErrorToast) {
+                    showToast(message, 'error');
+                }
+                return false;
+            }
+        }
+
+        function initializeApiControls() {
+            try {
+                setApiBaseUrl(API_BASE_URL);
+            } catch (error) {
+                console.warn('API 기본 주소 초기화 실패:', error);
+                try {
+                    setApiBaseUrl(DEFAULT_API_BASE_URL);
+                } catch (innerError) {
+                    console.error('기본 API 주소 설정 실패:', innerError);
+                }
+            }
+
+            updateApiStatus('checking', '연결 확인 중...');
+
+            const apiCheckButton = document.getElementById('apiCheckButton');
+            if (apiCheckButton) {
+                apiCheckButton.addEventListener('click', () => {
+                    checkApiConnection({ showSuccessToast: true });
+                });
+            }
+
+            const apiSettingsButton = document.getElementById('apiSettingsButton');
+            if (apiSettingsButton) {
+                apiSettingsButton.addEventListener('click', async () => {
+                    const input = prompt('지식베이스 API 기본 주소를 입력하세요.', API_BASE_URL);
+                    if (input === null) {
+                        return;
+                    }
+                    try {
+                        const previousBaseUrl = API_BASE_URL;
+                        const normalized = setApiBaseUrl(input);
+                        if (normalized === previousBaseUrl) {
+                            showToast('입력한 주소가 현재와 동일합니다. 연결 상태를 다시 확인합니다.', 'info');
+                            await checkApiConnection({ showSuccessToast: true });
+                            return;
+                        }
+                        showToast('API 기본 주소가 저장되었습니다.', 'success');
+                        const connected = await checkApiConnection({ suppressErrorToast: true, showSuccessToast: true });
+                        if (connected) {
+                            await initializeData();
+                        }
+                    } catch (error) {
+                        const message = error instanceof Error ? error.message : '유효한 주소를 입력해주세요.';
+                        showToast(message, 'error');
+                    }
+                });
+            }
+        }
+
+        // 전역 상태
+        let currentTab = 'documents';
+        let documents = [];
+        let faqList = [];
+        let isUploading = false;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            initializeApiControls();
+            setupEventListeners();
+            const connected = await checkApiConnection({ suppressErrorToast: true });
+            if (!connected) {
+                console.warn('지식베이스 API 연결을 확인할 수 없습니다.');
+            }
+            await initializeData();
+        });
+
+        async function initializeData() {
+            try {
+                await loadDocumentsFromServer();
+            } catch (error) {
+                console.error('문서 데이터를 불러오는 중 오류가 발생했습니다.', error);
+                showToast(error.message || '문서 목록을 불러오지 못했습니다.', 'error');
+            }
+
+            try {
+                await loadFaqsFromServer();
+            } catch (error) {
+                console.error('FAQ 데이터를 불러오는 중 오류가 발생했습니다.', error);
+                showToast(error.message || 'FAQ 목록을 불러오지 못했습니다.', 'error');
+            }
+        }
+
+        function setupEventListeners() {
+            try {
+                const fileInput = document.getElementById('documentFileInput');
+                if (fileInput) {
+                    fileInput.addEventListener('change', handleFileUpload);
+                }
+
+                const uploadArea = document.getElementById('documentUploadArea');
+                if (uploadArea) {
+                    setupDragAndDrop(uploadArea);
+                }
+
+                const tabButtons = document.querySelectorAll('.tab-btn');
+                tabButtons.forEach(button => {
+                    button.addEventListener('click', function() {
+                        const tabName = this.getAttribute('data-tab');
+                        switchTab(tabName);
+                    });
+                });
+
+                const faqSearch = document.getElementById('faqSearch');
+                if (faqSearch) {
+                    faqSearch.addEventListener('input', filterFaqs);
+                }
+            } catch (error) {
+                console.error('이벤트 리스너 설정 중 오류가 발생했습니다.', error);
+            }
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            const activeTabBtn = document.querySelector(`[data-tab="${tabName}"]`);
+            if (activeTabBtn) {
+                activeTabBtn.classList.add('active');
+            }
+
+            document.querySelectorAll('.tab-content').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            const activeTab = document.getElementById(tabName === 'documents' ? 'documentsTab' : 'faqTab');
+            if (activeTab) {
+                activeTab.classList.add('active');
+            }
+
+            if (tabName === 'documents' && documents.length === 0) {
+                loadDocumentsFromServer();
+            }
+            if (tabName === 'faq' && faqList.length === 0) {
+                loadFaqsFromServer();
+            }
+        }
+
+        async function loadDocumentsFromServer() {
+            const tableBody = document.getElementById('documentsTableBody');
+            if (tableBody) {
+                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">문서를 불러오는 중...</td></tr>';
+            }
+
+            try {
+                const data = await fetchJSON(`${API_BASE_URL}/knowledge?limit=50`);
+                documents = Array.isArray(data) ? data : [];
+                loadDocuments();
+                updateStatistics();
+            } catch (error) {
+                documents = [];
+                if (tableBody) {
+                    tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--danger-color);">문서를 불러오지 못했습니다.</td></tr>';
+                }
+                updateStatistics();
+                throw error;
+            }
+        }
+
+        function loadDocuments() {
+            const tableBody = document.getElementById('documentsTableBody');
+            if (!tableBody) return;
+
+            const filteredDocuments = getFilteredDocuments();
+            if (!filteredDocuments.length) {
+                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">표시할 문서가 없습니다.</td></tr>';
+                const selectAll = document.getElementById('selectAllDocuments');
+                if (selectAll) selectAll.checked = false;
+                return;
+            }
+
+            tableBody.innerHTML = filteredDocuments.map(doc => {
+                const name = escapeHtml(doc.original_name || doc.name || '이름 없는 문서');
+                const excerpt = escapeHtml(doc.preview || doc.excerpt || '요약 정보가 없습니다.');
+                const sizeLabel = typeof doc.size === 'number' ? formatFileSize(doc.size) : escapeHtml(doc.size || '-');
+                const uploadDate = formatDate(doc.created_at || doc.uploadDate);
+                const status = doc.status || 'processing';
+                const statusClass = status === 'active' ? 'active' : status === 'processing' ? 'processing' : 'error';
+                const statusText = status === 'active' ? '사용중' : status === 'processing' ? '처리중' : '오류';
+
+                return `
+                    <tr>
+                        <td><input type="checkbox" class="document-checkbox" data-id="${doc.id}"></td>
+                        <td>
+                            <div class="document-info">
+                                <i class="fas ${getFileIcon(doc.type)} document-icon"></i>
+                                <div class="document-details">
+                                    <span class="document-name">${name}</span>
+                                    <span class="document-excerpt">${excerpt}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td>${sizeLabel}</td>
+                        <td>${uploadDate}</td>
+                        <td>
+                            <span class="status-badge ${statusClass}">
+                                ${statusText}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn-small" title="문서 보기" onclick="previewDocument(${doc.id})">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="action-btn-small delete" title="삭제" onclick="deleteDocument(${doc.id})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            const selectAll = document.getElementById('selectAllDocuments');
+            if (selectAll) selectAll.checked = false;
+        }
+
+        function getFilteredDocuments() {
+            const searchTerm = (document.getElementById('documentSearch')?.value || '').trim().toLowerCase();
+            if (!searchTerm) {
+                return [...documents];
+            }
+
+            return documents.filter(doc => {
+                const name = (doc.original_name || doc.name || '').toLowerCase();
+                const excerpt = (doc.preview || doc.excerpt || '').toLowerCase();
+                return name.includes(searchTerm) || excerpt.includes(searchTerm);
+            });
+        }
+
+        function filterDocuments() {
+            loadDocuments();
+        }
+
+        function updateStatistics() {
+            const totalDocs = documents.length;
+            const totalFaqItems = faqList.length;
+
+            const totalDocumentsEl = document.getElementById('totalDocuments');
+            if (totalDocumentsEl) totalDocumentsEl.textContent = totalDocs.toLocaleString();
+
+            const documentCountEl = document.getElementById('documentCount');
+            if (documentCountEl) documentCountEl.textContent = `${totalDocs.toLocaleString()}개 문서`;
+
+            const totalFaqsEl = document.getElementById('totalFaqs');
+            if (totalFaqsEl) totalFaqsEl.textContent = totalFaqItems.toLocaleString();
+
+            const faqCountEl = document.getElementById('faqCount');
+            if (faqCountEl) faqCountEl.textContent = `${totalFaqItems.toLocaleString()}개 FAQ`;
+        }
+
+        function getFileIcon(type) {
+            const iconMap = {
+                'application/pdf': 'fa-file-pdf',
+                'application/msword': 'fa-file-word',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'fa-file-word',
+                'text/plain': 'fa-file-lines',
+                'text/markdown': 'fa-file-lines',
+                'image/png': 'fa-file-image',
+                'image/jpeg': 'fa-file-image',
+                'image/jpg': 'fa-file-image',
+                'image/gif': 'fa-file-image'
+            };
+            return iconMap[type] || 'fa-file';
+        }
+
+        function setupDragAndDrop(area) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                area.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                area.addEventListener(eventName, () => area.classList.add('drag-over'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                area.addEventListener(eventName, () => area.classList.remove('drag-over'), false);
+            });
+
+            area.addEventListener('drop', handleDrop, false);
+        }
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            if (files && files.length > 0) {
+                uploadFiles(files);
+            }
+        }
+
+        function handleDrop(event) {
+            const files = event.dataTransfer?.files;
+            if (files && files.length > 0) {
+                uploadFiles(files);
+            }
+        }
+
+        async function uploadFiles(fileList) {
+            if (!fileList || fileList.length === 0 || isUploading) return;
+
+            isUploading = true;
+            showUploadingState();
+
+            const files = Array.from(fileList);
+            let successCount = 0;
+            const failures = [];
+
+            try {
+                for (const file of files) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    try {
+                        await fetchJSON(`${API_BASE_URL}/knowledge/upload`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        successCount += 1;
+                    } catch (error) {
+                        failures.push({ file, error });
+                    }
+                }
+            } finally {
+                hideUploadingState();
+                const fileInput = document.getElementById('documentFileInput');
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+            }
+
+            if (successCount > 0) {
+                showToast(`${successCount}개 파일이 업로드되었습니다.`, 'success');
+            }
+            if (failures.length > 0) {
+                const errorMessage = failures.length === 1
+                    ? `${failures[0].file.name} 업로드에 실패했습니다: ${failures[0].error?.message || '오류가 발생했습니다.'}`
+                    : `${failures.length}개 파일 업로드 중 오류가 발생했습니다.`;
+                showToast(errorMessage, 'error');
+            }
+
+            await loadDocumentsFromServer();
+        }
+
+        function showUploadingState() {
+            const overlay = document.getElementById('uploadOverlay');
+            if (overlay) {
+                overlay.classList.add('show');
+            }
+        }
+
+        function hideUploadingState() {
+            const overlay = document.getElementById('uploadOverlay');
+            if (overlay) {
+                overlay.classList.remove('show');
+            }
+            isUploading = false;
+        }
+
+        function showAddFaqModal() {
+            const modal = document.getElementById('faqAddModal');
+            if (modal) {
+                const questionInput = document.getElementById('faqQuestion');
+                const answerInput = document.getElementById('faqAnswer');
+                if (questionInput) questionInput.value = '';
+                if (answerInput) answerInput.value = '';
+                modal.style.display = 'flex';
+            }
+        }
+
+        function closeFaqAddModal() {
+            const modal = document.getElementById('faqAddModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        async function submitNewFaq() {
+            const question = document.getElementById('faqQuestion')?.value.trim();
+            const answer = document.getElementById('faqAnswer')?.value.trim();
+
+            if (!question || !answer) {
+                showToast('질문과 답변을 모두 입력해주세요.', 'warning');
+                return;
+            }
+
+            try {
+                await fetchJSON(`${API_BASE_URL}/faqs`, {
+                    method: 'POST',
+                    body: { question, answer }
+                });
+                closeFaqAddModal();
+                showToast('새 FAQ가 추가되었습니다.', 'success');
+                await loadFaqsFromServer();
+            } catch (error) {
+                console.error('FAQ 추가 중 오류가 발생했습니다.', error);
+                showToast(error.message || 'FAQ 추가에 실패했습니다.', 'error');
+            }
+        }
+
+        function toggleFAQ(id) {
+            const content = document.getElementById(`faq-content-${id}`);
+            const chevron = document.getElementById(`chevron-${id}`);
+
+            if (!content || !chevron) {
+                return;
+            }
+
+            const isVisible = content.classList.contains('show');
+            if (isVisible) {
+                content.classList.remove('show');
+                content.style.display = 'none';
+                const chevronIcon = chevron.querySelector('i');
+                if (chevronIcon) {
+                    chevronIcon.style.transform = 'rotate(0deg)';
+                }
+            } else {
+                content.classList.add('show');
+                content.style.display = 'block';
+                const chevronIcon = chevron.querySelector('i');
+                if (chevronIcon) {
+                    chevronIcon.style.transform = 'rotate(180deg)';
+                }
+            }
+        }
+
+        async function editFAQ(id) {
+            const faq = faqList.find(item => item.id === id);
+            if (!faq) {
+                showToast('FAQ 정보를 찾을 수 없습니다.', 'error');
+                return;
+            }
+
+            const newQuestion = prompt('질문을 수정하세요.', faq.question);
+            if (newQuestion === null) {
+                return;
+            }
+
+            const newAnswer = prompt('답변을 수정하세요.', faq.answer);
+            if (newAnswer === null) {
+                return;
+            }
+
+            if (!newQuestion.trim() || !newAnswer.trim()) {
+                showToast('질문과 답변을 모두 입력해주세요.', 'warning');
+                return;
+            }
+
+            try {
+                await fetchJSON(`${API_BASE_URL}/faqs/${id}`, {
+                    method: 'PATCH',
+                    body: { question: newQuestion.trim(), answer: newAnswer.trim() }
+                });
+                showToast('FAQ가 수정되었습니다.', 'success');
+                await loadFaqsFromServer();
+            } catch (error) {
+                console.error('FAQ 수정 중 오류가 발생했습니다.', error);
+                showToast(error.message || 'FAQ 수정에 실패했습니다.', 'error');
+            }
+        }
+
+        async function deleteFAQ(id) {
+            if (!confirm('이 FAQ를 삭제하시겠습니까?')) {
+                return;
+            }
+
+            try {
+                await fetchJSON(`${API_BASE_URL}/faqs/${id}`, { method: 'DELETE' });
+                showToast('FAQ가 삭제되었습니다.', 'success');
+                await loadFaqsFromServer();
+            } catch (error) {
+                console.error('FAQ 삭제 중 오류가 발생했습니다.', error);
+                showToast(error.message || 'FAQ 삭제에 실패했습니다.', 'error');
+            }
+        }
+
+        async function loadFaqsFromServer() {
+            const container = document.getElementById('faqList');
+            if (container) {
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">FAQ를 불러오는 중...</div>';
+            }
+
+            try {
+                const data = await fetchJSON(`${API_BASE_URL}/faqs?limit=50`);
+                faqList = Array.isArray(data) ? data : [];
+                renderFaqList();
+                updateStatistics();
+            } catch (error) {
+                faqList = [];
+                if (container) {
+                    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--danger-color);">FAQ를 불러오지 못했습니다.</div>';
+                }
+                updateStatistics();
+                throw error;
+            }
+        }
+
+        function getFilteredFaqs() {
+            const searchTerm = (document.getElementById('faqSearch')?.value || '').trim().toLowerCase();
+            if (!searchTerm) {
+                return [...faqList];
+            }
+
+            return faqList.filter(faq => {
+                const question = (faq.question || '').toLowerCase();
+                const answer = (faq.answer || '').toLowerCase();
+                return question.includes(searchTerm) || answer.includes(searchTerm);
+            });
+        }
+
+        function filterFaqs() {
+            renderFaqList();
+        }
+
+        function renderFaqList() {
+            const container = document.getElementById('faqList');
+            if (!container) return;
+
+            const items = getFilteredFaqs();
+            if (!items.length) {
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">표시할 FAQ가 없습니다.</div>';
+                return;
+            }
+
+            container.innerHTML = items.map(faq => {
+                const question = escapeHtml(faq.question || '');
+                const answer = formatAnswer(faq.answer);
+                const views = formatNumber(faq.views);
+                const satisfaction = formatSatisfaction(faq.satisfaction);
+                const createdAt = formatDate(faq.created_at);
+
+                return `
+                    <div class="faq-item">
+                        <div class="faq-header" onclick="toggleFAQ(${faq.id})">
+                            <div class="faq-question">
+                                <i class="fas fa-question-circle" style="color: var(--primary-color);"></i>
+                                <span>${question}</span>
+                            </div>
+                            <div class="faq-actions">
+                                <div class="faq-stats">
+                                    <span><i class="fas fa-eye"></i> ${views}회</span>
+                                    <span><i class="fas fa-thumbs-up"></i> ${satisfaction}</span>
+                                </div>
+                                <button class="action-btn-small" title="편집" onclick="editFAQ(${faq.id}); event.stopPropagation();">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="action-btn-small delete" title="삭제" onclick="deleteFAQ(${faq.id}); event.stopPropagation();">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                <button class="action-btn-small" id="chevron-${faq.id}">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="faq-content" id="faq-content-${faq.id}">
+                            <div class="faq-answer">${answer}</div>
+                            <div class="faq-meta">
+                                <span><strong>생성일:</strong> ${createdAt}</span>
+                                <span><strong>만족도:</strong> ${satisfaction}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function previewDocument(id) {
+            showToast('문서 미리보기 기능은 개발 중입니다.', 'info');
+        }
+
+        async function deleteDocument(id) {
+            if (!confirm('이 문서를 삭제하시겠습니까? 챗봇에서도 더 이상 사용할 수 없습니다.')) {
+                return;
+            }
+
+            try {
+                await fetchJSON(`${API_BASE_URL}/knowledge/${id}`, { method: 'DELETE' });
+                showToast('문서가 삭제되었습니다.', 'success');
+                await loadDocumentsFromServer();
+            } catch (error) {
+                console.error('문서 삭제 중 오류가 발생했습니다.', error);
+                showToast(error.message || '문서 삭제에 실패했습니다.', 'error');
+            }
+        }
+
+        function toggleAllDocuments(checked) {
+            document.querySelectorAll('.document-checkbox').forEach(checkbox => {
+                checkbox.checked = checked;
+            });
+        }
+
+        async function bulkDeleteDocuments() {
+            const selectedIds = [];
+            document.querySelectorAll('.document-checkbox:checked').forEach(cb => {
+                const id = Number(cb.dataset.id);
+                if (!Number.isNaN(id)) {
+                    selectedIds.push(id);
+                }
+            });
+
+            if (selectedIds.length === 0) {
+                showToast('삭제할 문서를 선택해주세요.', 'warning');
+                return;
+            }
+
+            if (!confirm(`선택한 ${selectedIds.length}개 문서를 삭제하시겠습니까?`)) {
+                return;
+            }
+
+            let successCount = 0;
+            let failureCount = 0;
+
+            for (const id of selectedIds) {
+                try {
+                    await fetchJSON(`${API_BASE_URL}/knowledge/${id}`, { method: 'DELETE' });
+                    successCount += 1;
+                } catch (error) {
+                    failureCount += 1;
+                }
+            }
+
+            if (successCount > 0) {
+                showToast(`${successCount}개 문서가 삭제되었습니다.`, 'success');
+            }
+            if (failureCount > 0) {
+                showToast(`${failureCount}개 문서 삭제에 실패했습니다.`, 'error');
+            }
+
+            const selectAll = document.getElementById('selectAllDocuments');
+            if (selectAll) {
+                selectAll.checked = false;
+            }
+
+            await loadDocumentsFromServer();
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (document.body.contains(toast)) {
+                        document.body.removeChild(toast);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        function formatFileSize(bytes) {
+            if (typeof bytes !== 'number' || Number.isNaN(bytes)) {
+                return '-';
+            }
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+        }
+
+        function formatDate(value) {
+            if (!value) {
+                return '-';
+            }
+            try {
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) {
+                    return '-';
+                }
+                return date.toISOString().split('T')[0];
+            } catch (error) {
+                return '-';
+            }
+        }
+
+        function escapeHtml(value) {
+            if (typeof value !== 'string') {
+                return '';
+            }
+            return value
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function formatAnswer(answer) {
+            if (typeof answer !== 'string' || !answer.trim()) {
+                return '<p>답변 내용이 없습니다.</p>';
+            }
+            const escaped = escapeHtml(answer.trim());
+            return escaped.replace(/\n/g, '<br>');
+        }
+
+        function formatNumber(value) {
+            if (typeof value !== 'number' || Number.isNaN(value)) {
+                return '0';
+            }
+            return value.toLocaleString();
+        }
+
+        function formatSatisfaction(value) {
+            if (typeof value !== 'number' || Number.isNaN(value)) {
+                return '-';
+            }
+            return `${Math.round(value)}%`;
+        }
+    </script>
+</body>
+</html>
