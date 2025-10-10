@@ -50,7 +50,7 @@ VECTOR_DB_CONNECTION = os.getenv(
 
 # 7) 임베딩·채팅·Chroma
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "gpt-3.5-turbo")
+DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "gpt-4o-mini")
 CHROMA_PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", "./chroma_db")
 
 # 8) 모델 카탈로그
@@ -59,6 +59,10 @@ CLAUDE_MODELS = os.getenv("CLAUDE_MODELS", "")
 ANTHROPIC_MODELS = os.getenv("ANTHROPIC_MODELS", "")
 GOOGLE_MODELS = os.getenv("GOOGLE_MODELS", "")
 FRIENDLI_MODELS = os.getenv("FRIENDLI_MODELS", "")
+
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+LLM_MODEL    = os.getenv("LLM_MODEL", DEFAULT_CHAT_MODEL)
+
 
 # 9) 엔드포인트
 EXAONE_ENDPOINT = os.getenv("EXAONE_ENDPOINT")

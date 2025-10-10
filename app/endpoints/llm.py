@@ -13,7 +13,6 @@ from langchain_service.embedding.get_vector import text_to_vector
 from langchain_service.llm.setup import get_llm
 from schemas.llm import ChatQARequest, QARequest, QAResponse, QASource
 
-
 router = APIRouter(tags=["LLM"])
 
 
