@@ -1,34 +1,16 @@
-# Pydantic 스키마 (요청/응답)
-
-from pydantic import BaseModel, Field, EmailStr
-from datetime import datetime
+# SCHEMAS/system.py
+from __future__ import annotations
 from typing import Optional, Literal
+from pydantic import BaseModel, Field
+from datetime import datetime
 
-# ========== SystemSetting ==========
-
+# ----- SystemSetting -----
 OperatingHours = Literal["24/7", "business", "extended"]
 FileUploadMode = Literal["true", "images", "false"]
 SessionDuration = Literal["30", "60", "120", "unlimited"]
 MaxMessages = Literal["10", "30", "50", "unlimited"]
 
-
 class SystemSettingBase(BaseModel):
-    welcome_title: str
-    welcome_message: str
-    operating_hours: OperatingHours = "business"
-    file_upload_mode: FileUploadMode = "true"
-    session_duration: SessionDuration = "60"
-    max_messages: MaxMessages = "30"
-    emergency_phone: str
-    emergency_email: EmailStr
-
-
-class SystemSettingCreate(SystemSettingBase):
-    # DB 기본값을 쓰려면 필요 필드만 전달하고 나머지는 생략 가능
-    pass
-
-
-class SystemSettingUpdate(BaseModel):
     welcome_title: Optional[str] = None
     welcome_message: Optional[str] = None
     operating_hours: Optional[OperatingHours] = None
@@ -36,43 +18,54 @@ class SystemSettingUpdate(BaseModel):
     session_duration: Optional[SessionDuration] = None
     max_messages: Optional[MaxMessages] = None
     emergency_phone: Optional[str] = None
-    emergency_email: Optional[EmailStr] = None
+    emergency_email: Optional[str] = None
 
+class SystemSettingCreate(SystemSettingBase):
+    # 생성 시 필수로 받길 원하면 Optional 제거하고 필수화하면 됨
+    welcome_title: str
+    welcome_message: str
+    emergency_phone: str
+    emergency_email: str
 
-class SystemSettingResponse(SystemSettingBase):
+class SystemSettingUpdate(SystemSettingBase):
+    pass
+
+class SystemSettingResponse(BaseModel):
     id: int
+    welcome_title: str
+    welcome_message: str
+    operating_hours: OperatingHours
+    file_upload_mode: FileUploadMode
+    session_duration: SessionDuration
+    max_messages: MaxMessages
+    emergency_phone: str
+    emergency_email: str
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
-
-# ========== QuickCategory ==========
-
+# ----- QuickCategory -----
 class QuickCategoryBase(BaseModel):
-    # setting_id: int    ## 굳이 참조 안해 도 됨
-    icon_emoji: str
-    name: str
-    description: Optional[str] = None
-    sort_order: int = Field(0, ge=0)
-
-
-class QuickCategoryCreate(QuickCategoryBase):
-    pass
-
-
-class QuickCategoryUpdate(BaseModel):
     icon_emoji: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
     sort_order: Optional[int] = Field(default=None, ge=0)
 
+class QuickCategoryCreate(QuickCategoryBase):
+    icon_emoji: str
+    name: str
 
-class QuickCategoryResponse(QuickCategoryBase):
+class QuickCategoryUpdate(QuickCategoryBase):
+    pass
+
+class QuickCategoryResponse(BaseModel):
     id: int
+    icon_emoji: str
+    name: str
+    description: Optional[str]
+    sort_order: int
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
