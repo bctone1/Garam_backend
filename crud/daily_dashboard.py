@@ -12,7 +12,7 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
     sql = text("""
     WITH days AS (
       SELECT g::date AS d
-      FROM generate_series(:start::date, :end::date, interval '1 day') AS g
+      FROM generate_series(CAST(:start AS date), CAST(:end AS date), interval '1 day') AS g
     ),
     -- 세션(범위 제한)
     cs AS (
@@ -22,7 +22,8 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
         (created_at AT TIME ZONE 'Asia/Seoul')::time AS t,
         resolved
       FROM chat_session
-      WHERE (created_at AT TIME ZONE 'Asia/Seoul')::date BETWEEN :start::date AND :end::date
+      WHERE (created_at AT TIME ZONE 'Asia/Seoul')::date
+            BETWEEN CAST(:start AS date) AND CAST(:end AS date)
     ),
     cs_hour AS (
       SELECT d, EXTRACT(HOUR FROM t)::int AS h, COUNT(*) AS c
@@ -44,7 +45,8 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
         session_id, role, response_latency_ms
       FROM message
       WHERE role IN ('assistant','user')
-        AND (created_at AT TIME ZONE 'Asia/Seoul')::date BETWEEN :start::date AND :end::date
+        AND (created_at AT TIME ZONE 'Asia/Seoul')::date
+            BETWEEN CAST(:start AS date) AND CAST(:end AS date)
     ),
     -- assistant 응답지연 통계
     assistant_latency AS (
@@ -81,7 +83,8 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
         SUM(CASE WHEN rating='helpful' THEN 1 ELSE 0 END)     AS helpful,
         SUM(CASE WHEN rating='not_helpful' THEN 1 ELSE 0 END) AS not_helpful
       FROM feedback
-      WHERE (created_at AT TIME ZONE 'Asia/Seoul')::date BETWEEN :start::date AND :end::date
+      WHERE (created_at AT TIME ZONE 'Asia/Seoul')::date
+            BETWEEN CAST(:start AS date) AND CAST(:end AS date)
       GROUP BY 1
     ),
     -- 문의(범위 제한)
@@ -90,7 +93,8 @@ def upsert_daily_dashboard(db: Session, *, start: date, end: date) -> None:
         (created_at AT TIME ZONE 'Asia/Seoul')::date AS d,
         COUNT(*) AS cnt
       FROM inquiry
-      WHERE (created_at AT TIME ZONE 'Asia/Seoul')::date BETWEEN :start::date AND :end::date
+      WHERE (created_at AT TIME ZONE 'Asia/Seoul')::date
+            BETWEEN CAST(:start AS date) AND CAST(:end AS date)
       GROUP BY 1
     ),
     -- 일자별 최종 집계
@@ -215,7 +219,7 @@ def list_daily(db: Session, *, start: date, end: date, include_today: bool = Tru
       FROM kst_today kt
     )
     SELECT * FROM daily_dashboard
-      WHERE d BETWEEN :start::date AND ((SELECT d FROM kst_today) - INTERVAL '1 day')::date
+      WHERE d BETWEEN CAST(:start AS date) AND ((SELECT d FROM kst_today) - INTERVAL '1 day')::date
     UNION ALL
     SELECT * FROM today
     ORDER BY d DESC;
@@ -237,7 +241,7 @@ def window_averages(db: Session, *, days: int) -> Dict[str, float]:
         COALESCE(SUM(feedback_helpful), 0)::int,
         COALESCE(SUM(feedback_not_helpful), 0)::int
       FROM daily_dashboard
-      WHERE d >= (((now() AT TIME ZONE 'Asia/Seoul'))::date - (:days::int - 1))
+      WHERE d >= (((now() AT TIME ZONE 'Asia/Seoul'))::date - (CAST(:days AS int) - 1))
     """)
     s, m, rt, t, resolved, with_asst, helpf, nhelpf = db.execute(sql, {"days": days}).one()
 
