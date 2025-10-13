@@ -1,3 +1,6 @@
+# 우선 META LLM MSP에서 넘어옴
+
+
 import json
 
 # from langchain_service.langsmith import logging
@@ -11,7 +14,6 @@ import os
 
 # import re
 # from fastapi.responses import JSONResponse
-
 # logging.langsmith("Garam_RAG")
 
 llm = ChatOpenAI(
@@ -109,7 +111,6 @@ def preview_prompt(input: str):
         }}
         """
     )
-    # chain = LLMChain(llm=llm, prompt=prompt) # LLMChain 클래스는 LangChain 0.1.17부터 사용 중단(deprecated) 되었어요.
 
     chain = prompt | llm
     response = chain.invoke({"input": input})

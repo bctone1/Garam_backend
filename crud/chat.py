@@ -162,7 +162,7 @@ def last_by_role(db: Session, session_id: int, role: Role) -> Optional[Message]:
 
 # ========== Feedback ==========
 def _validate_feedback_anchor(session_id: Optional[int], message_id: Optional[int]) -> None:
-    # XOR: 하나만 채워야 함
+    # XOR : 둘중에 하나는 반드시 null 값 이어야 함
     if bool(session_id) == bool(message_id):
         raise ValueError("feedback must anchor to exactly one of session_id or message_id")
 
