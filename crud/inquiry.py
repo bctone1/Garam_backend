@@ -80,7 +80,17 @@ def list_inquiries(
     return db.execute(stmt).scalars().all()
 
 
-def create(db: Session, data: Dict[str, Any]) -> Inquiry:
+def create(db: Session, data: dict) -> Inquiry:
+    # 방어: 0, "", "0" → NULL
+    if data.get("assignee_admin_id") in (0, "0", ""):
+        data["assignee_admin_id"] = None
+    if data.get("customer_satisfaction") in ("", "null", "None"):
+        data["customer_satisfaction"] = None
+    # 일관성: 둘 다 NULL 또는 둘 다 NOT NULL
+    if (data.get("assignee_admin_id") is None) != (data.get("assigned_at") is None):
+        data["assignee_admin_id"] = None
+        data["assigned_at"] = None
+
     obj = Inquiry(**data)
     db.add(obj)
     db.commit()
