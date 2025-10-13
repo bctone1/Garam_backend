@@ -1,38 +1,35 @@
-# Pydantic 스키마 (요청/응답)
-
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
-
+from typing import Optional, Literal
 
 # -------------------------------
 # Inquiry
 # -------------------------------
+Status = Literal["new", "processing", "on_hold", "completed"]
+Satisfaction = Literal["satisfied", "unsatisfied"]
+
 class InquiryBase(BaseModel):
     customer_name: str
     company: Optional[str] = None
     phone: Optional[str] = None
     content: str
-    status: str  # 'new' | 'processing' | 'on_hold' | 'completed'
+    status: Status = "new"
     assignee_admin_id: Optional[int] = None
-    customer_satisfaction: Optional[str] = None  # 'satisfied' | 'unsatisfied'
-
+    customer_satisfaction: Optional[Satisfaction] = None
 
 class InquiryCreate(InquiryBase):
     pass
-
 
 class InquiryUpdate(BaseModel):
     customer_name: Optional[str] = None
     company: Optional[str] = None
     phone: Optional[str] = None
     content: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[Status] = None
     assignee_admin_id: Optional[int] = None
-    customer_satisfaction: Optional[str] = None
+    customer_satisfaction: Optional[Satisfaction] = None
     assigned_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-
 
 class InquiryResponse(InquiryBase):
     id: int
@@ -47,17 +44,19 @@ class InquiryResponse(InquiryBase):
 # -------------------------------
 # InquiryHistory
 # -------------------------------
+Action = Literal[
+    "assign", "on_hold", "resume", "transfer", "complete", "note", "contact", "delete"
+]
+
 class InquiryHistoryBase(BaseModel):
     inquiry_id: int
-    action: str  # 'assign' | 'on_hold' | 'resume' | 'transfer' | 'complete' | 'note' | 'contact' | 'delete'
-    admin_id: Optional[int] = None
-    to_admin_id: Optional[int] = None
+    action: Action
+    # ORM과 맞춤: id 대신 이름 문자열만 저장
+    admin_name: Optional[str] = None
     details: Optional[str] = None
-
 
 class InquiryHistoryCreate(InquiryHistoryBase):
     pass
-
 
 class InquiryHistoryResponse(InquiryHistoryBase):
     id: int
