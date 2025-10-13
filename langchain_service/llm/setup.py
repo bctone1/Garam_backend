@@ -5,13 +5,6 @@ from langchain_openai import ChatOpenAI
 import core.config as config
 from pydantic import SecretStr
 
-
-# 테스트용 openai 와 실제 서비스는 Exaone 이용
-DEFAULT_MODEL = getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini")
-FRIENDLI_MODEL = "LGAI-EXAONE/EXAONE-4.0.1-32B"
-FRIENDLI_BASE = "https://api.friendli.ai/serverless/v1"
-
-
 def _pick_key(*candidates):
     for key in candidates:
         if key:
@@ -28,7 +21,7 @@ def get_llm(provider: str = "openai", model: str | None = None,
         if not key:
             raise RuntimeError("OPENAI_API 키가 설정되지 않았습니다.")
         return ChatOpenAI(
-            model=model or DEFAULT_MODEL,
+            model=model or config.DEFAULT_CHAT_MODEL,
             api_key=key,
             temperature=temperature,
         )
@@ -38,9 +31,9 @@ def get_llm(provider: str = "openai", model: str | None = None,
         if not key:
             raise RuntimeError("FRIENDLI_API 키가 설정되지 않았습니다.")
         return ChatOpenAI(
-            model=model or FRIENDLI_MODEL,   # endpoint_id
+            model=model or config.FRIENDLI_MODELS,   # endpoint_id
             api_key=key,
-            base_url=FRIENDLI_BASE,
+            base_url=config.FRIENDLI_BASE_URL,
             temperature=temperature,
         )
 
@@ -56,7 +49,7 @@ def get_backend_agent(provider: str = "openai", model: str | None = None):
         if not key:
             raise RuntimeError("EMBEDDING_API/OPENAI_API 키가 설정되지 않았습니다.")
         return ChatOpenAI(
-            model=model or DEFAULT_MODEL,
+            model=model or config.FRIENDLI_MODELS,
             api_key=key,
             temperature=0.7,
         )
@@ -66,9 +59,9 @@ def get_backend_agent(provider: str = "openai", model: str | None = None):
         if not key:
             raise RuntimeError("FRIENDLI_API 키가 설정되지 않았습니다.")
         return ChatOpenAI(
-            model=model or FRIENDLI_MODEL,
+            model=model or config.FRIENDLI_MODELS,
             api_key=key,
-            base_url=FRIENDLI_BASE,
+            base_url=config.FRIENDLI_BASE_URL,
             temperature=0.7,
         )
 

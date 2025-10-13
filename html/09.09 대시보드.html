@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가람포스텍 Smart POS AI 관리센터</title>
+
+    <!-- 폰트 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #1e60e1;
+            --primary-dark: #1a54c7;
+            --primary-light: rgba(30, 96, 225, 0.1);
+            --accent-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --secondary-color: #f8f9fa;
+            --bg-white: #ffffff;
+            --text-primary: #2c3e50;
+            --text-secondary: #6c757d;
+            --border-color: #e9ecef;
+            --border-radius: 6px;
+            --border-radius-lg: 12px;
+            --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+            --transition: all 0.2s ease-in-out;
+            --header-height: 80px;
+        }
+
+        /* 기본 리셋 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: #f8fafc;
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* 로딩 오버레이 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+
+        .loading-content {
+            text-align: center;
+            color: var(--text-primary);
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        /* 왼쪽 사이드바 - 09.09 분석 보고서 스타일 기준 */
+        .sidebar {
+            width: 280px;
+            background: #1e293b;
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .brand-logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            border-radius: var(--border-radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .brand-info {
+            flex: 1;
+        }
+
+        .brand-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            color: white;
+        }
+
+        .brand-subtitle {
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        .sidebar-nav {
+            padding: 1.5rem 0;
+            flex: 1;
+        }
+
+        .nav-menu {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .nav-item {
+            margin-bottom: 0.25rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            transition: var(--transition);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: #334155;
+            color: white;
+        }
+
+        .nav-link.active {
+            background: var(--primary-color);
+            color: white;
+            border-right: 3px solid var(--primary-light);
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 1.5rem;
+            border-top: 1px solid #334155;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: white;
+            font-size: 0.875rem;
+        }
+
+        .user-email {
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        .sidebar-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: #334155;
+            color: #cbd5e1;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .action-btn:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* 메인 컨텐트 */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            background: #f8fafc;
+        }
+
+        .admin-wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* 사이드바 토글 버튼 숨기기 (데스크톱에서) */
+        .sidebar-toggle {
+            display: none;
+        }
+
+        /* 상단 헤더 */
+        .top-header {
+            background: var(--bg-white);
+            height: var(--header-height);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            width: 40px;
+            height: 40px;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            border-radius: var(--border-radius);
+            transition: var(--transition);
+        }
+
+        .mobile-menu-btn:hover {
+            background: var(--secondary-color);
+        }
+
+        .page-title h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .page-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .stat-item {
+            text-align: right;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-indicator.online .status-dot {
+            background: var(--accent-color);
+        }
+
+        .status-indicator.offline .status-dot {
+            background: var(--danger-color);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-text {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .refresh-btn {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-color);
+            border: none;
+            border-radius: var(--border-radius);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .refresh-btn:hover {
+            background: var(--primary-dark);
+            transform: scale(1.05);
+        }
+
+        .refresh-btn.spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        /* 메인 콘텐츠 섹션 */
+        .main-content section {
+            margin-bottom: 2rem;
+            padding: 0 2rem;
+        }
+
+        .main-content section:first-of-type {
+            margin-top: 2rem;
+        }
+
+        /* 메트릭 카드 섹션 */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .metric-card {
+            background: var(--bg-white);
+            border-radius: var(--border-radius-lg);
+            padding: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--primary-color);
+            transition: var(--transition);
+        }
+
+        .metric-card.primary::before {
+            background: var(--primary-color);
+        }
+
+        .metric-card.success::before {
+            background: var(--accent-color);
+        }
+
+        .metric-card.warning::before {
+            background: var(--warning-color);
+        }
+
+        .metric-card.danger::before {
+            background: var(--danger-color);
+        }
+
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .metric-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: var(--border-radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            flex-shrink: 0;
+        }
+
+        .metric-card.primary .metric-icon {
+            background: rgba(30, 96, 225, 0.1);
+            color: var(--primary-color);
+        }
+
+        .metric-card.success .metric-icon {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+        }
+
+        .metric-card.warning .metric-icon {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--warning-color);
+        }
+
+        .metric-card.danger .metric-icon {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger-color);
+        }
+
+        .metric-content {
+            flex: 1;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .metric-label {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+        }
+
+        .metric-change {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .metric-change.positive {
+            color: var(--accent-color);
+        }
+
+        .metric-change.negative {
+            color: var(--danger-color);
+        }
+
+        .metric-change.neutral {
+            color: var(--text-secondary);
+        }
+
+        .metric-change small {
+            font-weight: 400;
+            opacity: 0.8;
+        }
+
+        /* 차트 섹션 */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-card {
+            background: var(--bg-white);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .chart-card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chart-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .chart-period {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--bg-white);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .chart-action {
+            width: 36px;
+            height: 36px;
+            background: var(--secondary-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .chart-action:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .chart-container {
+            padding: 1.5rem;
+            height: 300px;
+            position: relative;
+        }
+
+        .chart-card.full-width .chart-container {
+            height: 200px;
+        }
+
+        /* 활동 섹션 */
+        .activity-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .activity-card {
+            background: var(--bg-white);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .activity-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .activity-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .view-all-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .view-all-link:hover {
+            color: var(--primary-dark);
+            text-decoration: underline;
+        }
+
+        .mark-all-read {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 0.875rem;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--border-radius);
+            transition: var(--transition);
+        }
+
+        .mark-all-read:hover {
+            background: var(--primary-light);
+        }
+
+        .activity-content {
+            padding: 1rem;
+        }
+
+        /* 대화 목록 */
+        .conversation-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .conversation-item {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            transition: var(--transition);
+        }
+
+        .conversation-item:hover {
+            background: var(--secondary-color);
+        }
+
+        .conversation-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(30, 96, 225, 0.1);
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .conversation-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .conversation-text {
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .conversation-meta {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+        }
+
+        .conversation-time {
+            color: var(--text-secondary);
+        }
+
+        /* 알림 목록 */
+        .notification-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .notification-item {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .notification-item.unread {
+            background: rgba(30, 96, 225, 0.05);
+        }
+
+        .notification-item.unread::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--primary-color);
+        }
+
+        .notification-item:hover {
+            background: var(--secondary-color);
+        }
+
+        .notification-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 1.125rem;
+        }
+
+        .notification-icon.success {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+        }
+
+        .notification-icon.warning {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--warning-color);
+        }
+
+        .notification-icon.info {
+            background: rgba(23, 162, 184, 0.1);
+            color: var(--info-color);
+        }
+
+        .notification-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .notification-text {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+            color: var(--text-primary);
+        }
+
+        .notification-time {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* 애니메이션 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .metric-card,
+        .chart-card,
+        .activity-card {
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .metric-card:nth-child(1) { animation-delay: 0.1s; }
+        .metric-card:nth-child(2) { animation-delay: 0.2s; }
+        .metric-card:nth-child(3) { animation-delay: 0.3s; }
+        .metric-card:nth-child(4) { animation-delay: 0.4s; }
+
+        /* 차트 로딩 상태 */
+        .chart-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+        }
+
+        .chart-loading i {
+            margin-right: 0.5rem;
+            animation: spin 1s linear infinite;
+        }
+
+        /* 반응형 */
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .activity-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .main-content { 
+                margin-left: 0; 
+            }
+            
+            .sidebar { 
+                transform: translateX(-100%); 
+                transition: transform 0.3s ease; 
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .sidebar-toggle {
+                display: flex;
+                width: 32px;
+                height: 32px;
+                border: none;
+                background: none;
+                color: #cbd5e1;
+                cursor: pointer;
+                align-items: center;
+                justify-content: center;
+                border-radius: var(--border-radius);
+                transition: var(--transition);
+            }
+            
+            .sidebar-toggle:hover {
+                background: #334155;
+            }
+            
+            .mobile-menu-btn {
+                display: flex;
+            }
+
+            .header-stats {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content section {
+                padding: 0 1rem;
+                margin-bottom: 1.5rem;
+            }
+
+            .main-content section:first-of-type {
+                margin-top: 1.5rem;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .metric-card {
+                padding: 1.5rem;
+                gap: 1rem;
+            }
+
+            .metric-icon {
+                width: 60px;
+                height: 60px;
+                font-size: 1.75rem;
+            }
+
+            .metric-value {
+                font-size: 2rem;
+            }
+
+            .chart-header {
+                padding: 1rem;
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .chart-controls {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+
+            .chart-container {
+                padding: 1rem;
+                height: 250px;
+            }
+
+            .activity-header {
+                padding: 1rem;
+            }
+
+            .top-header {
+                padding: 0 1rem;
+            }
+
+            .page-title h1 {
+                font-size: 1.25rem;
+            }
+
+            .sidebar-header {
+                padding: 1rem;
+            }
+
+            .sidebar-footer {
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .metric-card {
+                flex-direction: column;
+                text-align: center;
+                padding: 1.25rem;
+            }
+
+            .metric-change {
+                justify-content: center;
+            }
+
+            .chart-legend {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .conversation-item,
+            .notification-item {
+                padding: 0.75rem;
+                gap: 0.75rem;
+            }
+
+            .conversation-avatar,
+            .notification-icon {
+                width: 35px;
+                height: 35px;
+                font-size: 1rem;
+            }
+
+            .header-right {
+                gap: 0.75rem;
+            }
+
+            .refresh-btn {
+                width: 35px;
+                height: 35px;
+            }
+
+            .page-subtitle {
+                display: none;
+            }
+        }
+
+        /* 접근성 */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* 포커스 스타일 */
+        button:focus,
+        a:focus,
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        /* 선택 스타일 */
+        ::selection {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 로딩 오버레이 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p>관리자 시스템 로딩 중...</p>
+        </div>
+    </div>
+
+    <!-- 메인 래퍼 -->
+    <div class="admin-wrapper">
+        <!-- 사이드바 -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-logo">
+                    <i class="fas fa-microchip"></i>
+                </div>
+                <div class="brand-info">
+                    <h2 class="brand-name">가람포스텍</h2>
+                    <p class="brand-subtitle">AI 관리센터</p>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                        <a href="09.09 대시보드.html" class="nav-link active">
+                            <i class="fas fa-tachometer-alt"></i>
+                            <span class="nav-text">대시보드</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.09 지식베이스 관리.html" class="nav-link">
+                            <i class="fas fa-book"></i>
+                            <span class="nav-text">지식베이스 관리</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.09 AI 모델 설정.html" class="nav-link">
+                            <i class="fas fa-robot"></i>
+                            <span class="nav-text">AI 모델 설정</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.09 분석 및 보고서.html" class="nav-link">
+                            <i class="fas fa-chart-bar"></i>
+                            <span class="nav-text">분석 및 보고서</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.09 챗봇 운영 설정.html" class="nav-link">
+                            <i class="fas fa-comments"></i>
+                            <span class="nav-text">챗봇 운영 설정</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="09.15 문의 관리.html" class="nav-link">
+                            <i class="fas fa-comments"></i>
+                            <span class="nav-text">문의 관리</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="user-avatar">
+                        <i class="fas fa-user-tie"></i>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">관리자</div>
+                        <div class="user-email">admin@garampos.com</div>
+                    </div>
+                </div>
+                <div class="sidebar-actions">
+                    <button class="action-btn" title="로그아웃">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 메인 콘텐츠 -->
+        <main class="main-content">
+            <!-- 상단 헤더 -->
+            <header class="top-header">
+                <div class="header-left">
+                    <button class="mobile-menu-btn" id="mobileMenuBtn">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div class="page-title">
+                        <h1>대시보드</h1>
+                        <p class="page-subtitle">Smart POS AI 기술지원 현황</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="header-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">시스템 상태</span>
+                            <div class="status-indicator online">
+                                <span class="status-dot"></span>
+                                <span class="status-text">정상</span>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">마지막 업데이트</span>
+                            <span class="stat-value" id="lastUpdate">방금 전</span>
+                        </div>
+                    </div>
+                    <button class="refresh-btn" id="refreshBtn" title="새로고침">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- 메트릭 카드 섹션 -->
+            <section class="metrics-section">
+                <div class="metrics-grid">
+                    <div class="metric-card primary">
+                        <div class="metric-icon">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value" id="totalConversations">1,247</div>
+                            <div class="metric-label">이 문의 수</div>
+                            <div class="metric-change positive">
+                                <i class="fas fa-arrow-up"></i>
+                                <span>+15.3%</span>
+                                <small>지난주 대비</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card success">
+                        <div class="metric-icon">
+                            <i class="fas fa-thumbs-up"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value" id="satisfactionRate">91.4%</div>
+                            <div class="metric-label">사용자 만족도</div>
+                            <div class="metric-change positive">
+                                <i class="fas fa-arrow-up"></i>
+                                <span>+3.2%</span>
+                                <small>지난주 대비</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card warning">
+                        <div class="metric-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value" id="avgResponseTime">1.8초</div>
+                            <div class="metric-label">평균 응답시간</div>
+                            <div class="metric-change neutral">
+                                <i class="fas fa-minus"></i>
+                                <span>-0.2초</span>
+                                <small>지난주 대비</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 차트 섹션 -->
+            <section class="charts-section">
+                <div class="charts-grid">
+                    <!-- 일일 문의량 트렌드 -->
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-title">일일 문의량 트렌드</h3>
+                            <div class="chart-controls">
+                                <select class="chart-period" id="trendPeriod">
+                                    <option value="7">지난 7일</option>
+                                    <option value="30" selected>지난 30일</option>
+                                    <option value="90">지난 90일</option>
+                                </select>
+                                <button class="chart-action" title="차트 다운로드">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- 피드백 기반 만족도 분포 -->
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-title">사용자 피드백 분포</h3>
+                            <div class="chart-controls">
+                                <button class="chart-action" title="차트 다운로드">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="feedbackChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 시간대별 사용량 -->
+                <div class="chart-card full-width">
+                    <div class="chart-header">
+                        <h3 class="chart-title">시간대별 사용량</h3>
+                        <div class="chart-controls">
+                            <div class="chart-legend">
+                                <span class="legend-item">
+                                    <span class="legend-color" style="background: #1e60e1;"></span>
+                                    문의량
+                                </span>
+                                <span class="legend-item">
+                                    <span class="legend-color" style="background: #28a745;"></span>
+                                    만족도
+                                </span>
+                            </div>
+                            <button class="chart-action" title="차트 다운로드">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 최근 활동 섹션 -->
+            <section class="activity-section">
+                <div class="activity-grid">
+                    <!-- 최근 대화 -->
+                    <div class="activity-card">
+                        <div class="activity-header">
+                            <h3 class="activity-title">최근 대화</h3>
+                            <a href="분석 및 보고서.html" class="view-all-link">전체 보기</a>
+                        </div>
+                        <div class="activity-content">
+                            <div class="conversation-list" id="recentConversations">
+                                <div class="conversation-item">
+                                    <div class="conversation-avatar">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <div class="conversation-content">
+                                        <div class="conversation-text">POS 시스템이 갑자기 꺼졌어요</div>
+                                        <div class="conversation-meta">
+                                            <span class="conversation-time">5분 전</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="conversation-item">
+                                    <div class="conversation-avatar">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <div class="conversation-content">
+                                        <div class="conversation-text">키오스크 터치가 안 돼요</div>
+                                        <div class="conversation-meta">
+                                            <span class="conversation-time">12분 전</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="conversation-item">
+                                    <div class="conversation-avatar">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <div class="conversation-content">
+                                        <div class="conversation-text">카드 결제가 안 됩니다</div>
+                                        <div class="conversation-meta">
+                                            <span class="conversation-time">18분 전</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE_URL = (window.API_BASE_URL || '').replace(/\/$/, '');
+
+        async function fetchJSON(url, options = {}) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    let message = `HTTP ${response.status}`;
+                    try {
+                        const data = await response.json();
+                        if (data?.detail) {
+                            message = data.detail;
+                        } else if (typeof data === 'string') {
+                            message = data;
+                        }
+                    } catch (jsonError) {
+                        // ignore json parse error
+                    }
+                    throw new Error(message);
+                }
+
+                if (response.status === 204) {
+                    return null;
+                }
+
+                const text = await response.text();
+                if (!text) {
+                    return null;
+                }
+
+                try {
+                    return JSON.parse(text);
+                } catch (parseError) {
+                    return null;
+                }
+            } catch (error) {
+                if (error instanceof Error) {
+                    throw error;
+                }
+                throw new Error('네트워크 오류가 발생했습니다.');
+            }
+        }
+
+        class DashboardApi {
+            constructor(baseUrl) {
+                this.baseUrl = baseUrl || '';
+            }
+
+            buildUrl(path, params) {
+                const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+                const query = params ? `?${new URLSearchParams(params).toString()}` : '';
+                return `${this.baseUrl}${normalizedPath}${query}`;
+            }
+
+            getDashboardMetrics() {
+                return fetchJSON(this.buildUrl('/analytics/dashboard'));
+            }
+
+            getDailyTimeseries(days) {
+                return fetchJSON(this.buildUrl('/analytics/timeseries/daily', { days: String(days) }));
+            }
+
+            getHourlyUsage(days) {
+                return fetchJSON(this.buildUrl('/analytics/timeseries/hourly', { days: String(days) }));
+            }
+
+            getDailySummary(start, end, includeToday = true) {
+                return fetchJSON(
+                    this.buildUrl('/analytics/daily', {
+                        start,
+                        end,
+                        include_today: includeToday ? 'true' : 'false'
+                    })
+                );
+            }
+        }
+
+        function formatDateRange(days) {
+            const clamped = Math.max(1, days);
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - (clamped - 1));
+
+            const toStr = (date) => {
+                const year = date.getFullYear();
+                const month = `${date.getMonth() + 1}`.padStart(2, '0');
+                const day = `${date.getDate()}`.padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            return {
+                start: toStr(start),
+                end: toStr(end)
+            };
+        }
+
+        function formatNumber(value) {
+            if (value === null || value === undefined || Number.isNaN(value)) {
+                return '-';
+            }
+            if (typeof value === 'number') {
+                return value.toLocaleString('ko-KR');
+            }
+            return value;
+        }
+
+        // 사이드바 관련 기능
+        class SidebarManager {
+            constructor(api) {
+                this.api = api;
+                this.sidebar = document.getElementById('sidebar');
+                this.sidebarToggle = document.getElementById('sidebarToggle');
+                this.mobileMenuBtn = document.getElementById('mobileMenuBtn');
+                this.refreshBtn = document.getElementById('refreshBtn');
+                this.markAllReadBtn = document.getElementById('markAllRead');
+                this.lastUpdateElement = document.getElementById('lastUpdate');
+
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.setCurrentPage();
+                this.loadMetrics();
+            }
+
+            bindEvents() {
+                // 사이드바 토글 (데스크톱)
+                if (this.sidebarToggle) {
+                    this.sidebarToggle.addEventListener('click', () => this.toggleSidebar());
+                }
+
+                // 모바일 메뉴 토글
+                if (this.mobileMenuBtn) {
+                    this.mobileMenuBtn.addEventListener('click', () => this.toggleMobileSidebar());
+                }
+
+                // 새로고침 버튼
+                if (this.refreshBtn) {
+                    this.refreshBtn.addEventListener('click', () => this.refreshData());
+                }
+
+                // 모든 알림 읽음 처리
+                if (this.markAllReadBtn) {
+                    this.markAllReadBtn.addEventListener('click', () => this.markAllNotificationsRead());
+                }
+
+                // 사이드바 외부 클릭 시 닫기 (모바일)
+                document.addEventListener('click', (e) => {
+                    if (window.innerWidth <= 1024 && this.sidebar?.classList.contains('mobile-open')) {
+                        if (!this.sidebar.contains(e.target) && !this.mobileMenuBtn?.contains(e.target)) {
+                            this.closeMobileSidebar();
+                        }
+                    }
+                });
+
+                // 윈도우 리사이즈 이벤트
+                window.addEventListener('resize', () => this.handleResize());
+
+                // 키보드 단축키
+                document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e));
+            }
+
+            toggleSidebar() {
+                if (this.sidebar) {
+                    this.sidebar.classList.toggle('collapsed');
+                    
+                    const isCollapsed = this.sidebar.classList.contains('collapsed');
+                    localStorage.setItem('garampos_sidebar_collapsed', isCollapsed);
+                    
+                    const icon = this.sidebarToggle?.querySelector('i');
+                    if (icon) {
+                        icon.className = isCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left';
+                    }
+                }
+            }
+
+            toggleMobileSidebar() {
+                if (this.sidebar) {
+                    this.sidebar.classList.toggle('mobile-open');
+                    
+                    if (this.sidebar.classList.contains('mobile-open')) {
+                        document.body.style.overflow = 'hidden';
+                    } else {
+                        document.body.style.overflow = '';
+                    }
+                }
+            }
+
+            closeMobileSidebar() {
+                if (this.sidebar) {
+                    this.sidebar.classList.remove('mobile-open');
+                    document.body.style.overflow = '';
+                }
+            }
+
+            handleResize() {
+                if (window.innerWidth > 1024) {
+                    this.closeMobileSidebar();
+                    
+                    const isCollapsed = localStorage.getItem('garampos_sidebar_collapsed') === 'true';
+                    if (isCollapsed && this.sidebar) {
+                        this.sidebar.classList.add('collapsed');
+                    }
+                }
+            }
+
+            handleKeyboardShortcuts(e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+                    e.preventDefault();
+                    if (window.innerWidth > 1024) {
+                        this.toggleSidebar();
+                    } else {
+                        this.toggleMobileSidebar();
+                    }
+                }
+
+                if (e.key === 'Escape' && this.sidebar?.classList.contains('mobile-open')) {
+                    this.closeMobileSidebar();
+                }
+
+                if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+                    e.preventDefault();
+                    this.refreshData();
+                }
+            }
+
+            setCurrentPage() {
+                const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+                const navLinks = document.querySelectorAll('.nav-link');
+                
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    const href = link.getAttribute('href');
+                    if (href === currentPage || (currentPage === '' && href === 'index.html')) {
+                        link.classList.add('active');
+                    }
+                });
+            }
+
+            updateLastUpdate() {
+                if (this.lastUpdateElement) {
+                    const now = new Date();
+                    const timeStr = now.toLocaleTimeString('ko-KR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    this.lastUpdateElement.textContent = timeStr;
+                }
+            }
+
+            async loadMetrics() {
+                if (!this.api) {
+                    return;
+                }
+
+                try {
+                    const metrics = await this.api.getDashboardMetrics();
+                    this.lastMetrics = metrics;
+                    this.renderMetrics(metrics);
+                    this.updateLastUpdate();
+                } catch (error) {
+                    console.error('메트릭 로딩 오류:', error);
+                    this.showNotification(error.message || '대시보드 데이터를 불러오지 못했습니다.', 'error');
+                }
+            }
+
+            renderMetrics(metrics) {
+                if (!metrics) {
+                    this.updateMetricDisplay('totalConversations', '-');
+                    this.updateMetricDisplay('satisfactionRate', '-');
+                    this.updateMetricDisplay('avgResponseTime', '-');
+                    return;
+                }
+
+                const totalSessions = metrics.total_sessions ?? 0;
+                const satisfactionRate = (metrics.satisfaction_rate ?? 0) * 100;
+                const avgResponseMs = metrics.avg_response_ms ?? 0;
+                const avgResponseSeconds = avgResponseMs / 1000;
+
+                this.updateMetricDisplay('totalConversations', formatNumber(totalSessions));
+                this.updateMetricDisplay('satisfactionRate', `${satisfactionRate.toFixed(1)}%`);
+                this.updateMetricDisplay('avgResponseTime', `${avgResponseSeconds.toFixed(1)}초`);
+            }
+
+            updateMetricDisplay(id, value) {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value;
+                }
+            }
+
+            refreshData() {
+                if (this.refreshBtn) {
+                    this.refreshBtn.classList.add('spinning');
+
+                    this.performDataRefresh().then(() => {
+                        this.refreshBtn.classList.remove('spinning');
+                        this.showNotification('데이터가 새로고침되었습니다.', 'success');
+                    }).catch((error) => {
+                        this.refreshBtn.classList.remove('spinning');
+                        this.showNotification('새로고침 중 오류가 발생했습니다.', 'error');
+                        console.error('Refresh error:', error);
+                    });
+                }
+            }
+
+            async performDataRefresh() {
+                const tasks = [this.loadMetrics()];
+
+                if (window.chartManager?.refreshCharts) {
+                    tasks.push(window.chartManager.refreshCharts());
+                }
+
+                await Promise.all(tasks);
+            }
+
+            markAllNotificationsRead() {
+                const unreadNotifications = document.querySelectorAll('.notification-item.unread');
+                
+                unreadNotifications.forEach(notification => {
+                    notification.classList.remove('unread');
+                });
+
+                this.showNotification('모든 알림을 읽음 처리했습니다.', 'success');
+            }
+
+            showNotification(message, type = 'info', duration = 3000) {
+                const existingNotification = document.querySelector('.admin-notification');
+                if (existingNotification) {
+                    existingNotification.remove();
+                }
+
+                const notification = document.createElement('div');
+                notification.className = `admin-notification ${type}`;
+                notification.innerHTML = `
+                    <div class="notification-content">
+                        <i class="fas ${this.getNotificationIcon(type)}"></i>
+                        <span>${message}</span>
+                    </div>
+                    <button class="notification-close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+
+                Object.assign(notification.style, {
+                    position: 'fixed',
+                    top: '20px',
+                    right: '20px',
+                    padding: '1rem 1.5rem',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    zIndex: '10000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    minWidth: '300px',
+                    maxWidth: '500px',
+                    opacity: '0',
+                    transform: 'translateX(100%)',
+                    transition: 'all 0.3s ease'
+                });
+
+                const colors = {
+                    success: { bg: '#d4edda', color: '#155724', border: '#c3e6cb' },
+                    error: { bg: '#f8d7da', color: '#721c24', border: '#f5c6cb' },
+                    warning: { bg: '#fff3cd', color: '#856404', border: '#ffeaa7' },
+                    info: { bg: '#d1ecf1', color: '#0c5460', border: '#bee5eb' }
+                };
+
+                const colorScheme = colors[type] || colors.info;
+                Object.assign(notification.style, {
+                    backgroundColor: colorScheme.bg,
+                    color: colorScheme.color,
+                    border: `1px solid ${colorScheme.border}`
+                });
+
+                document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    notification.style.opacity = '1';
+                    notification.style.transform = 'translateX(0)';
+                }, 10);
+
+                const closeBtn = notification.querySelector('.notification-close');
+                const closeNotification = () => {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => notification.remove(), 300);
+                };
+
+                closeBtn.addEventListener('click', closeNotification);
+
+                if (duration > 0) {
+                    setTimeout(closeNotification, duration);
+                }
+            }
+
+            getNotificationIcon(type) {
+                const icons = {
+                    success: 'fa-check-circle',
+                    error: 'fa-exclamation-circle',
+                    warning: 'fa-exclamation-triangle',
+                    info: 'fa-info-circle'
+                };
+                return icons[type] || icons.info;
+            }
+        }
+        // 차트 초기화 클래스
+        class ChartManager {
+            constructor(api) {
+                this.api = api;
+                this.charts = {};
+                this.currentTrendDays = 30;
+                this.initCharts().catch(error => {
+                    console.error('차트 초기화 오류:', error);
+                });
+            }
+
+            async initCharts() {
+                await this.refreshCharts();
+            }
+
+            async refreshCharts() {
+                if (!this.api) {
+                    return;
+                }
+
+                try {
+                    await Promise.all([
+                        this.initTrendChart(this.currentTrendDays),
+                        this.initFeedbackChart(),
+                        this.initHourlyChart()
+                    ]);
+                } catch (error) {
+                    console.error('차트 새로고침 중 오류:', error);
+                }
+            }
+
+            async initTrendChart(days = this.currentTrendDays || 30) {
+                const ctx = document.getElementById('trendChart');
+                if (!ctx || typeof Chart === 'undefined') {
+                    console.warn('trendChart 캔버스를 찾을 수 없거나 Chart.js가 로드되지 않았습니다.');
+                    return;
+                }
+
+                try {
+                    const points = await this.api.getDailyTimeseries(days);
+                    const labels = [];
+                    const data = [];
+
+                    (points || []).forEach(point => {
+                        const ts = new Date(point.ts);
+                        if (Number.isNaN(ts.getTime())) {
+                            return;
+                        }
+                        labels.push(ts.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }));
+                        data.push(point.sessions ?? 0);
+                    });
+
+                    if (labels.length === 0) {
+                        const range = formatDateRange(days);
+                        labels.push(`${range.start} ~ ${range.end}`);
+                        data.push(0);
+                    }
+
+                    if (this.charts.trend) {
+                        this.charts.trend.data.labels = labels;
+                        this.charts.trend.data.datasets[0].data = data;
+                        this.charts.trend.update();
+                    } else {
+                        this.charts.trend = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: '일일 문의 수',
+                                    data: data,
+                                    borderColor: '#1e60e1',
+                                    backgroundColor: 'rgba(30, 96, 225, 0.1)',
+                                    tension: 0.4,
+                                    fill: true
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        display: false
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        grid: {
+                                            color: '#e9ecef'
+                                        }
+                                    },
+                                    x: {
+                                        grid: {
+                                            display: false
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    this.currentTrendDays = days;
+                } catch (error) {
+                    console.error('트렌드 차트 초기화 오류:', error);
+                }
+            }
+
+            async initFeedbackChart(days = 30) {
+                const ctx = document.getElementById('feedbackChart');
+                if (!ctx || typeof Chart === 'undefined') {
+                    console.warn('feedbackChart 캔버스를 찾을 수 없거나 Chart.js가 로드되지 않았습니다.');
+                    return;
+                }
+
+                try {
+                    const range = formatDateRange(days);
+                    const summary = await this.api.getDailySummary(range.start, range.end, true);
+
+                    let helpful = 0;
+                    let notHelpful = 0;
+                    let inquiries = 0;
+
+                    (summary || []).forEach(item => {
+                        helpful += item.feedback_helpful ?? 0;
+                        notHelpful += item.feedback_not_helpful ?? 0;
+                        inquiries += item.inquiries_created ?? 0;
+                    });
+
+                    const totalFeedback = helpful + notHelpful;
+                    const noResponse = Math.max(0, inquiries - totalFeedback);
+                    const dataset = [helpful, notHelpful, noResponse];
+
+                    if (this.charts.feedback) {
+                        this.charts.feedback.data.datasets[0].data = dataset;
+                        this.charts.feedback.update();
+                    } else {
+                        this.charts.feedback = new Chart(ctx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['도움됨', '도움안됨', '미응답'],
+                                datasets: [{
+                                    data: dataset,
+                                    backgroundColor: [
+                                        '#28a745',
+                                        '#dc3545',
+                                        '#6c757d'
+                                    ],
+                                    borderWidth: 2,
+                                    borderColor: '#fff'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        position: 'bottom',
+                                        labels: {
+                                            padding: 20,
+                                            usePointStyle: true
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('피드백 차트 초기화 오류:', error);
+                }
+            }
+
+            async initHourlyChart(days = 7) {
+                const canvas = document.getElementById('hourlyChart');
+                if (!canvas || typeof Chart === 'undefined') {
+                    console.warn('hourlyChart 캔버스를 찾을 수 없거나 Chart.js가 로드되지 않았습니다.');
+                    return;
+                }
+
+                try {
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        console.error('hourlyChart의 2D 컨텍스트를 가져올 수 없습니다.');
+                        return;
+                    }
+
+                    const range = formatDateRange(days);
+                    const [hourlyPoints, summary] = await Promise.all([
+                        this.api.getHourlyUsage(days),
+                        this.api.getDailySummary(range.start, range.end, true)
+                    ]);
+
+                    const labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+                    const totals = new Array(24).fill(0);
+
+                    (hourlyPoints || []).forEach(point => {
+                        const ts = new Date(point.ts);
+                        if (Number.isNaN(ts.getTime())) {
+                            return;
+                        }
+                        const hour = ts.getHours();
+                        totals[hour] += point.messages ?? 0;
+                    });
+
+                    const divisor = Math.max(days, 1);
+                    const inquiries = totals.map(sum => Math.round(sum / divisor));
+
+                    let helpful = 0;
+                    let notHelpful = 0;
+                    (summary || []).forEach(item => {
+                        helpful += item.feedback_helpful ?? 0;
+                        notHelpful += item.feedback_not_helpful ?? 0;
+                    });
+
+                    const satisfaction = helpful + notHelpful > 0
+                        ? (helpful / (helpful + notHelpful)) * 100
+                        : 0;
+                    const satisfactionData = Array(24).fill(Number(satisfaction.toFixed(1)));
+
+                    if (this.charts.hourly) {
+                        this.charts.hourly.data.labels = labels;
+                        this.charts.hourly.data.datasets[0].data = inquiries;
+                        this.charts.hourly.data.datasets[1].data = satisfactionData;
+                        this.charts.hourly.update();
+                    } else {
+                        this.charts.hourly = new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: '문의량',
+                                    data: inquiries,
+                                    backgroundColor: 'rgba(30, 96, 225, 0.8)',
+                                    yAxisID: 'y'
+                                }, {
+                                    label: '만족도 (%)',
+                                    data: satisfactionData,
+                                    type: 'line',
+                                    borderColor: '#28a745',
+                                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                    yAxisID: 'y1',
+                                    tension: 0.4
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: {
+                                    mode: 'index',
+                                    intersect: false,
+                                },
+                                scales: {
+                                    x: {
+                                        grid: {
+                                            display: false
+                                        }
+                                    },
+                                    y: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'left',
+                                        grid: {
+                                            color: '#e9ecef'
+                                        },
+                                        title: {
+                                            display: true,
+                                            text: '문의 수'
+                                        }
+                                    },
+                                    y1: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'right',
+                                        grid: {
+                                            drawOnChartArea: false,
+                                        },
+                                        title: {
+                                            display: true,
+                                            text: '만족도 (%)'
+                                        }
+                                    }
+                                },
+                                plugins: {
+                                    legend: {
+                                        display: false
+                                    }
+                                }
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('시간별 차트 초기화 오류:', error);
+                }
+            }
+
+            async updateTrendPeriod(days) {
+                this.currentTrendDays = days;
+                await this.initTrendChart(days);
+            }
+        }
+
+
+// DOM 로드 완료 시 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            // 로딩 오버레이 숨기기
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                setTimeout(() => {
+                    loadingOverlay.style.opacity = '0';
+                    setTimeout(() => {
+                        loadingOverlay.style.display = 'none';
+                    }, 300);
+                }, 500);
+            }
+
+            // 관리자 시스템 초기화
+            const api = new DashboardApi(API_BASE_URL);
+            window.sidebarManager = new SidebarManager(api);
+            window.chartManager = new ChartManager(api);
+
+            // 차트 기간 변경 이벤트
+            const trendPeriodSelect = document.getElementById('trendPeriod');
+            if (trendPeriodSelect) {
+                trendPeriodSelect.addEventListener('change', async (e) => {
+                    const days = parseInt(e.target.value, 10) || 30;
+                    try {
+                        await window.chartManager.updateTrendPeriod(days);
+                    } catch (error) {
+                        console.error('차트 기간 업데이트 오류:', error);
+                    }
+                });
+            }
+        });
+
+        // 페이지 언로드 시 정리
+        window.addEventListener('beforeunload', () => {
+            if (window.sidebarManager) {
+                // 필요한 정리 작업
+            }
+        });
+    </script>
+</body>
+</html>

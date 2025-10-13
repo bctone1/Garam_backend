@@ -2,6 +2,7 @@
 from operator import itemgetter
 from typing import Optional, Callable
 from sqlalchemy.orm import Session
+
 from langchain_core.runnables import RunnableLambda, RunnableMap
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -9,6 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from crud import model as crud_model
 from crud.knowledge import search_chunks_by_vector
 from langchain_service.prompt.style import build_system_prompt, llm_params
+from core import config
 
 
 def make_qa_chain(
@@ -17,8 +19,8 @@ def make_qa_chain(
     text_to_vector: Callable[[str], list[float]],
     *,
     knowledge_id: Optional[int] = None,
-    top_k: int = 5,
-    max_ctx_chars: int = 5000,
+    top_k: int = 8,
+    max_ctx_chars: int = 12000,
     restrict_to_kb: bool = True,
 ):
     m = crud_model.get_single(db)
@@ -51,12 +53,23 @@ def make_qa_chain(
     retriever = RunnableLambda(_retrieve)
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", system_txt),
-        ("system", guard_msg),
-        ("human", "{question}"),
+        ("system", system_txt + "\n"
+        "규칙: 제공된 컨텍스트를 우선하여 답하고, 정말 관련이 없을 때만 "
+        "짧게 '해당내용은 찾을 수 없음'이라고 답하라."),
+        ("human",
+        "다음 컨텍스트만 근거로 답하세요.\n"
+        "[컨텍스트 시작]\n{context}\n[컨텍스트 끝]\n\n"
+        "질문: {question}")
     ])
 
-    llm = get_llm(**llm_params(m.fast_response_mode))
+    # llm = get_llm(**llm_params(m.fast_response_mode))
+
+    params = llm_params(m.fast_response_mode)
+    provider = getattr(config, "LLM_PROVIDER", "openai")
+    model = getattr(config, "LLM_MODEL",
+        getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
+    llm = get_llm(provider=provider, model=model,
+        temperature = params.get("temperature", 0.7))
 
     return (
         RunnableMap({

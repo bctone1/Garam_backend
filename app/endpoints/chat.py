@@ -13,6 +13,7 @@ from schemas.chat import (
     FeedbackCreate, FeedbackResponse,
 )
 from service.metrics import recompute_model_metrics
+from core.scheduler import trigger_upsert_today_now
 from langchain_service.embedding.get_vector import text_to_vector
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -20,8 +21,15 @@ VECTOR_DIM = 1536
 
 # -------- ChatSession --------
 @router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
-def create_session(payload: ChatSessionCreate, db: Session = Depends(get_db)):
-    return crud.create_session(db, payload.model_dump())
+def create_session(
+    payload: ChatSessionCreate,
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,  # FastAPI가 주입
+):
+    obj = crud.create_session(db, payload.model_dump())
+    # 대시보드: 세션 생성 시 당일 롤업 즉시 갱신(실시간 카드 반영)
+    background_tasks.add_task(trigger_upsert_today_now)
+    return obj
 
 @router.get("/sessions", response_model=list[ChatSessionResponse])
 def list_sessions(
@@ -52,11 +60,18 @@ class EndSessionIn(BaseModel):
     resolved: Optional[bool] = None
 
 @router.post("/sessions/{session_id}/end", response_model=ChatSessionResponse)
-def end_session(session_id: int, payload: EndSessionIn | None = None, db: Session = Depends(get_db)):
+def end_session(
+    session_id: int,
+    payload: EndSessionIn | None = None,
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,  # FastAPI가 주입
+):
     resolved = payload.resolved if payload else None
     obj = crud.end_session(db, session_id, resolved=resolved)
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
+    # 대시보드: 세션 종료/해결 시 오늘 롤업 갱신 (sessions_resolved 반영)
+    background_tasks.add_task(trigger_upsert_today_now)
     return obj
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -117,7 +132,10 @@ def create_message(
     )
 
     if role == "assistant":
+        # 모델 메트릭 재계산
         background_tasks.add_task(_recompute_job)
+        # 대시보드: 어시스턴트 응답 생성 시 오늘 롤업 즉시 갱신
+        background_tasks.add_task(trigger_upsert_today_now)
 
     return obj
 

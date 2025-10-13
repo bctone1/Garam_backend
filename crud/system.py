@@ -1,50 +1,58 @@
+# CRUD/system.py
 from __future__ import annotations
-from typing import Optional, List, Dict, Any
-from sqlalchemy import select
+from typing import Optional, Iterable
 from sqlalchemy.orm import Session
+from sqlalchemy import case, select
 from models.system import SystemSetting, QuickCategory
 
+# ========== SystemSetting (싱글톤) ==========
 
-# =========================
-# SystemSetting
-# =========================
-def create_setting(db: Session, data: Dict[str, Any]) -> SystemSetting:
+def _get_latest_setting(db: Session) -> Optional[SystemSetting]:
+    # updated_at DESC 인덱스 존재
+    return (
+        db.query(SystemSetting)
+        .order_by(SystemSetting.updated_at.desc(), SystemSetting.id.desc())
+        .first()
+    )
+
+def create_setting(db: Session, data: dict) -> SystemSetting:
+    """
+    싱글톤 정책: 기존 레코드가 있으면 '업데이트처럼' 덮어쓰고, 없으면 생성.
+    엔드포인트는 항상 객체를 반환하길 기대하므로 예외 대신 upsert 방식으로 처리.
+    """
+    curr = _get_latest_setting(db)
+    if curr:
+        for key, value in data.items():
+            if hasattr(curr, key) and value is not None:
+                setattr(curr, key, value)
+        db.add(curr)
+        db.commit()
+        db.refresh(curr)
+        return curr
+
     obj = SystemSetting(**data)
     db.add(obj)
     db.commit()
     db.refresh(obj)
     return obj
 
-
 def get_current_setting(db: Session) -> Optional[SystemSetting]:
-    stmt = select(SystemSetting).order_by(SystemSetting.updated_at.desc()).limit(1)
-    return db.execute(stmt).scalar_one_or_none()
+    return _get_latest_setting(db)
 
-
-# def list_settings(db: Session, *, offset: int = 0, limit: int = 50) -> List[SystemSetting]:
-#     stmt = (
-#         select(SystemSetting)
-#         .order_by(SystemSetting.updated_at.desc())
-#         .offset(offset)
-#         .limit(min(limit, 100))
-#     )
-#     return db.execute(stmt).scalars().all()
-
-
-def update_current_setting(db: Session, data: Dict[str, Any]) -> Optional[SystemSetting]:
-    obj = get_current_setting(db)
+def update_current_setting(db: Session, data: dict) -> Optional[SystemSetting]:
+    obj = _get_latest_setting(db)
     if not obj:
         return None
-    for k, v in data.items():
-        setattr(obj, k, v)
+    for key, value in data.items():
+        if hasattr(obj, key) and value is not None:
+            setattr(obj, key, value)
     db.add(obj)
     db.commit()
     db.refresh(obj)
     return obj
 
-
 def delete_current_setting(db: Session) -> bool:
-    obj = get_current_setting(db)
+    obj = _get_latest_setting(db)
     if not obj:
         return False
     db.delete(obj)
@@ -52,73 +60,87 @@ def delete_current_setting(db: Session) -> bool:
     return True
 
 
-# =========================
-# QuickCategory
-# =========================
-def get_quick_category(db: Session, qc_id: int) -> Optional[QuickCategory]:
-    return db.get(QuickCategory, qc_id)
+# ========== QuickCategory (여러 개) ==========
 
-
-def list_quick_categories(db: Session, *, offset: int = 0, limit: int = 200) -> List[QuickCategory]:
-    stmt = (
-        select(QuickCategory)
-        .order_by(QuickCategory.sort_order.asc(), QuickCategory.created_at.asc())
+def list_quick_categories(db: Session, *, offset: int = 0, limit: int = 200):
+    return (
+        db.query(QuickCategory)
+        .order_by(QuickCategory.sort_order.asc(), QuickCategory.id.asc())
         .offset(offset)
-        .limit(min(limit, 1000))
+        .limit(limit)
+        .all()
     )
-    return db.execute(stmt).scalars().all()
 
+def create_quick_category(db: Session, data: dict) -> QuickCategory:
+    # sort_order 미지정 시 가장 뒤로 보내기
+    if data.get("sort_order") is None:
+        last = (
+            db.query(QuickCategory.sort_order)
+            .order_by(QuickCategory.sort_order.desc())
+            .first()
+        )
+        data["sort_order"] = (last[0] + 1) if last else 0
 
-def create_quick_category(db: Session, data: Dict[str, Any]) -> QuickCategory:
     obj = QuickCategory(**data)
     db.add(obj)
     db.commit()
     db.refresh(obj)
     return obj
 
+def get_quick_category(db: Session, qc_id: int) -> Optional[QuickCategory]:
+    return db.query(QuickCategory).get(qc_id)
 
-def update_quick_category(db: Session, qc_id: int, data: Dict[str, Any]) -> Optional[QuickCategory]:
-    obj = get_quick_category(db, qc_id)
+def update_quick_category(db: Session, qc_id: int, data: dict) -> Optional[QuickCategory]:
+    obj = db.query(QuickCategory).get(qc_id)
     if not obj:
         return None
-    for k, v in data.items():
-        setattr(obj, k, v)
+    for key, value in data.items():
+        if hasattr(obj, key) and value is not None:
+            setattr(obj, key, value)
     db.add(obj)
     db.commit()
     db.refresh(obj)
     return obj
 
-
 def delete_quick_category(db: Session, qc_id: int) -> bool:
-    obj = get_quick_category(db, qc_id)
+    obj = db.query(QuickCategory).get(qc_id)
     if not obj:
         return False
     db.delete(obj)
     db.commit()
     return True
 
+def reorder_quick_categories(db: Session, ordered_ids: list[int]) -> int:
+    """
+    프론트에서 드래그앤드롭으로 정렬한 id 배열을 받으면,
+    배열 순서대로 sort_order = 0..n-1 로 일괄 업데이트.
+    """
+    if not ordered_ids:
+        return 0
 
-# 정렬 유틸: 주어진 ID 순서대로 0..N-1 재배치
-def reorder_quick_categories(db: Session, ordered_ids: List[int]) -> int:
-    rows = list_quick_categories(db, offset=0, limit=10_000)
-    id2obj = {r.id: r for r in rows}
-    n = 0
-    for idx, qc_id in enumerate(ordered_ids):
-        obj = id2obj.get(qc_id)
-        if obj:
-            obj.sort_order = idx
-            db.add(obj)
-            n += 1
+    # CASE WHEN id=... THEN idx END
+    case_expr = case(
+        {id_: idx for idx, id_ in enumerate(ordered_ids)},
+        value=QuickCategory.id,
+        else_=QuickCategory.sort_order
+    )
+    q = db.query(QuickCategory).filter(QuickCategory.id.in_(ordered_ids))
+    updated = q.update({QuickCategory.sort_order: case_expr}, synchronize_session=False)
     db.commit()
-    return n
+    return updated
 
-
-# 누락된 항목 순서 보정(현재 sort_order 기준으로 0..N-1 재번호)
 def normalize_quick_category_order(db: Session) -> int:
-    rows = list_quick_categories(db, offset=0, limit=10_000)
-    for i, r in enumerate(rows):
-        if r.sort_order != i:
-            r.sort_order = i
-            db.add(r)
+    """
+    sort_order가 중복/틈이 있을 수 있어 현재 정렬 기준(sort_order, id)로
+    0..n-1로 재부여.
+    """
+    rows = (
+        db.query(QuickCategory)
+        .order_by(QuickCategory.sort_order.asc(), QuickCategory.id.asc())
+        .all()
+    )
+    for idx, row in enumerate(rows):
+        row.sort_order = idx
+        db.add(row)
     db.commit()
     return len(rows)
