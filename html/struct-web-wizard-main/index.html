@@ -605,7 +605,7 @@
           />
           <div class="input-chip">
             <label for="apiBaseInput">API</label>
-            <input id="apiBaseInput" type="text" placeholder="http://localhost:5000" autocomplete="off" />
+            <input id="apiBaseInput" type="text" placeholder="http://localhost:5002" autocomplete="off" />
           </div>
           <button class="ghost-button" id="checkConnectionButton">연결 확인</button>
         </div>
@@ -1059,7 +1059,7 @@
       });
 
       function restorePreferences() {
-        const savedBase = localStorage.getItem(STORAGE_KEYS.BASE_URL) || "http://localhost:5000";
+        const savedBase = localStorage.getItem(STORAGE_KEYS.BASE_URL) || "http://localhost:5002";
         state.baseUrl = sanitizeBaseUrl(savedBase);
         elements.apiBaseInput.value = state.baseUrl;
         const savedTitle = localStorage.getItem(STORAGE_KEYS.SESSION_TITLE) || "웹 채팅 세션";

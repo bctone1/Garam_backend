@@ -1,4 +1,3 @@
-# from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 from langchain_openai import ChatOpenAI
 
@@ -17,7 +16,7 @@ def get_llm(provider: str = "openai", model: str | None = None,
     if provider == "openai":
         key = _pick_key(api_key, getattr(config, "OPENAI_API", None),
                         getattr(config, "DEFAULT_API_KEY", None),
-                        os.getenv("OPENAI_API_KEY"))
+                        os.getenv("OPENAI_API"))
         if not key:
             raise RuntimeError("OPENAI_API 키가 설정되지 않았습니다.")
         return ChatOpenAI(
@@ -26,17 +25,16 @@ def get_llm(provider: str = "openai", model: str | None = None,
             temperature=temperature,
         )
 
-    elif provider in ("friendli", "lgai"):
+    elif provider in ("friendli", "EXAONE"):
         key = _pick_key(api_key, getattr(config, "FRIENDLI_API", None))
         if not key:
             raise RuntimeError("FRIENDLI_API 키가 설정되지 않았습니다.")
         return ChatOpenAI(
-            model=model or config.FRIENDLI_MODELS,   # endpoint_id
-            api_key=key,
+            model= model or config.LLM_MODEL,   # endpoint_id
+            api_key=config.FRIENDLI_API,
             base_url=config.FRIENDLI_BASE_URL,
             temperature=temperature,
         )
-
     else:
         raise ValueError(f"지원되지 않는 제공자: {provider}")
 
@@ -45,7 +43,7 @@ def get_backend_agent(provider: str = "openai", model: str | None = None):
     if provider == "openai":
         key = _pick_key(getattr(config, "EMBEDDING_API", None),
                         getattr(config, "OPENAI_API", None),
-                        os.getenv("OPENAI_API_KEY"))
+                        os.getenv("OPENAI_API"))
         if not key:
             raise RuntimeError("EMBEDDING_API/OPENAI_API 키가 설정되지 않았습니다.")
         return ChatOpenAI(
