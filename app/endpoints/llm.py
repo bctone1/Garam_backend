@@ -126,7 +126,7 @@ def ask_global_alias(payload: QARequest, db: Session = Depends(get_db)) -> QARes
     return ask_global(payload, db)
 
 
-
+# STT 처리
 @router.post("/stt", response_model=STTResponse)
 async def stt(file: UploadFile = File(...), lang: str = Form("ko-KR")):
     try:
