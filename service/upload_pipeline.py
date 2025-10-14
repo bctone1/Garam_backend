@@ -83,15 +83,15 @@ class UploadPipeline:
 
     def run(self, file: UploadFile) -> Knowledge:
         path = self.save_file(file)
-        kn = self.create_metadata(file)
+        know = self.create_metadata(file)
 
         num_pages = len(PyMuPDFLoader(path).load())
-        self.store_pages(kn.id, num_pages=num_pages)
+        self.store_pages(know.id, num_pages=num_pages)
 
         text = self.extract_text(path)
         chunks = self.chunk_text(text)
         vectors = self.embed_chunks(chunks)
         if vectors:
-            self.store_chunks(kn.id, chunks, vectors)
+            self.store_chunks(know.id, chunks, vectors)
 
-        return kn
+        return know
