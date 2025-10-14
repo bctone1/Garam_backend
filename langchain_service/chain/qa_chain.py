@@ -20,8 +20,8 @@ def make_qa_chain(
     *,
     knowledge_id: Optional[int] = None,
     top_k: int = 8,
-    max_ctx_chars: int = 12000,
-    restrict_to_kb: bool = True,
+    max_ctx_chars: int = 12000,     # max context characters : context를 이 글자수로 잘라 LLM에 넣음/많으면 누락 감소 비용증가
+    restrict_to_kb: bool = True,    # knowledge base 약자 : 찾은 context 근거로만 답함
 ):
     m = crud_model.get_single(db)
     if not m:
@@ -34,6 +34,7 @@ def make_qa_chain(
         suggest_agent_handoff=m.suggest_agent_handoff,
     )
 
+    # LLM 답변 범위 규정
     guard_msg = (
         "다음은 지식베이스 컨텍스트다.\n{context}\n"
         "컨텍스트 밖이면 '해당내용은 찾을 수 없음'이라고만 답하라."

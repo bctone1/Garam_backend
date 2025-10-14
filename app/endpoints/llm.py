@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 
 from crud import chat as crud_chat
@@ -124,3 +124,25 @@ def ask_global(payload: QARequest, db: Session = Depends(get_db)) -> QAResponse:
 @router.post("/qa/query", response_model=QAResponse)
 def ask_global_alias(payload: QARequest, db: Session = Depends(get_db)) -> QAResponse:
     return ask_global(payload, db)
+
+
+
+## STT 서비스 구현 2025-10-14
+from service.stt_service import STTService
+from service.audio_pipeline import handle_audio_query
+
+
+@router.post("/query")
+async def audio_query(
+    file: UploadFile = File(...),
+    session_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    # 임시 저장
+    tmp = "/tmp/input.wav"
+    with open(tmp, "wb") as f:
+        f.write(await file.read())
+
+    stt = STTService(provider="whisper", model="base")
+    result = handle_audio_query(db, tmp, session_id=session_id, stt=stt)
+    return result
