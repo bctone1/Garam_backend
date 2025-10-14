@@ -929,7 +929,7 @@
         const formData = new FormData();
         formData.append("file", blob, `recording.${extension}`);
         try {
-          const response = await fetch(`${state.baseUrl}/stt/transcribe`, {
+          const response = await fetch(`${state.baseUrl}/stt`, {
             method: "POST",
             body: formData,
           });
