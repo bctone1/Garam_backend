@@ -76,7 +76,7 @@ def _run_qa(
         _update_last_user_vector(db, session_id, vector)
 
     try:
-        chain = make_qa_chain(db, get_llm, text_to_vector, knowledge_id=knowledge_id, top_k=top_k)
+        chain = make_qa_chain(db, get_llm, text_to_vector, knowledge_id=knowledge_id, top_k=top_k,)
     except RuntimeError as exc:  # active model 이 없을 때 등
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
