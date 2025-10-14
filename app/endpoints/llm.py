@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 from typing import Iterable, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,Form
 from sqlalchemy.orm import Session
 
 from crud import chat as crud_chat
@@ -12,6 +10,8 @@ from langchain_service.chain.qa_chain import make_qa_chain
 from langchain_service.embedding.get_vector import text_to_vector
 from langchain_service.llm.setup import get_llm
 from schemas.llm import ChatQARequest, QARequest, QAResponse, QASource
+from service.stt import transcribe_bytes
+from schemas.llm import STTResponse, STTQAParams
 
 router = APIRouter(tags=["LLM"])
 
@@ -127,22 +127,32 @@ def ask_global_alias(payload: QARequest, db: Session = Depends(get_db)) -> QARes
 
 
 
-## STT 서비스 구현 2025-10-14
-from service.stt_service import STTService
-from service.audio_pipeline import handle_audio_query
+@router.post("/stt", response_model=STTResponse)
+async def stt(file: UploadFile = File(...), lang: str = Form("ko-KR")):
+    try:
+        text = transcribe_bytes(await file.read(), file.content_type or "", lang)
+        return STTResponse(text=text)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="empty transcription")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"stt failed: {e}")
 
-
-@router.post("/query")
-async def audio_query(
+@router.post("/stt_qa", response_model=QAResponse)
+async def stt_qa(
     file: UploadFile = File(...),
-    session_id: int | None = None,
+    params: STTQAParams = Depends(STTQAParams.as_form),
     db: Session = Depends(get_db),
 ):
-    # 임시 저장
-    tmp = "/tmp/input.wav"
-    with open(tmp, "wb") as f:
-        f.write(await file.read())
-
-    stt = STTService(provider="whisper", model="base")
-    result = handle_audio_query(db, tmp, session_id=session_id, stt=stt)
-    return result
+    try:
+        text = transcribe_bytes(await file.read(), file.content_type or "", params.lang)
+        return _run_qa(
+            db,
+            question=text,
+            knowledge_id=params.knowledge_id,
+            top_k=params.top_k,
+            session_id=params.session_id,
+        )
+    except ValueError:
+        raise HTTPException(status_code=422, detail="empty transcription")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"stt failed: {e}")

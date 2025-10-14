@@ -1,9 +1,7 @@
 from __future__ import annotations
-
 from typing import Optional
-
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, Field, conint
+from fastapi import Form
 
 class QARequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4000)
@@ -32,3 +30,24 @@ class QAResponse(BaseModel):
     session_id: Optional[int] = None
     sources: list[QASource] = Field(default_factory=list)
     documents: list[QASource] = Field(default_factory=list)
+
+
+
+class STTResponse(BaseModel):
+    text: str
+
+class STTQAParams(BaseModel):
+    lang: str = "ko-KR"
+    knowledge_id: Optional[int] = None
+    top_k: conint(gt=0, le=20) = 5
+    session_id: Optional[int] = None
+
+    @classmethod
+    def as_form(
+        cls,
+        lang: str = Form("ko-KR"),
+        knowledge_id: Optional[int] = Form(None),
+        top_k: int = Form(5),
+        session_id: Optional[int] = Form(None),
+    ):
+        return cls(lang=lang, knowledge_id=knowledge_id, top_k=top_k, session_id=session_id)

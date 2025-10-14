@@ -1,33 +1,29 @@
-from typing import Optional, Callable
-from service.stt_service import STTService
-from langchain_service.chain.qa_chain import make_qa_chain
+import tempfile, os, subprocess
+import speech_recognition as sr
 
-def stt_to_rag(
-    db,
-    audio_path: str,
-    *,
-    stt: STTService,
-    get_llm: Callable[..., object],
-    text_to_vector: Callable[[str], list[float]],
-    knowledge_id: Optional[int] = None,
-    top_k: int = 5,
-    max_ctx_chars: int = 5000,
-) -> dict:
-    # 1) STT
-    text = stt.transcribe(audio_path)
-    text = _normalize(text)  # 선택
+_rec = sr.Recognizer()
 
-    # 2) RAG (기존 qa_chain 그대로 사용)
-    chain = make_qa_chain(
-        db,
-        get_llm=get_llm,
-        text_to_vector=text_to_vector,
-        knowledge_id=knowledge_id,
-        top_k=top_k,
-        max_ctx_chars=max_ctx_chars,
-    )
-    answer = chain.invoke(text)
-    return {"query": text, "answer": answer}
-
-def _normalize(s: str) -> str:
-    return " ".join(s.strip().split())
+def transcribe_bytes(data: bytes, content_type: str = "", lang: str = "ko-KR") -> str:
+    with tempfile.NamedTemporaryFile(delete=False) as raw:
+        raw.write(data); raw.flush()
+        raw_path = raw.name
+    try:
+        if content_type in ("audio/wav", "audio/x-wav"):
+            wav_path = raw_path
+        else:
+            wav_path = raw_path + ".wav"
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", raw_path, "-ac", "1", "-ar", "16000", wav_path],
+                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        with sr.AudioFile(wav_path) as src:
+            audio = _rec.record(src)
+        text = _rec.recognize_google(audio, language=lang).strip()
+        if not text:
+            raise ValueError("empty transcription")
+        return text
+    finally:
+        for p in (locals().get("wav_path"), raw_path):
+            if p and os.path.exists(p):
+                try: os.remove(p)
+                except: pass
