@@ -32,3 +32,9 @@ friendli-client
 # anthropic==0.68.0
 # langchain-google-genai==2.1.12
 # google-ai-generativelanguage==0.7.0
+
+
+speechRecognition
+pyaudio
+
+
