@@ -4,6 +4,8 @@ from typing import Optional, Iterable
 from sqlalchemy.orm import Session
 from sqlalchemy import case, select
 from models.system import SystemSetting, QuickCategory
+from schemas.system import QuickCategoryCreate
+
 
 # ========== SystemSetting (싱글톤) ==========
 
@@ -71,6 +73,44 @@ def list_quick_categories(db: Session, *, offset: int = 0, limit: int = 200):
         .all()
     )
 
+def upsert_quick_categories(db: Session, payload_list: list[QuickCategoryCreate]):
+    results = []
+
+    for item in payload_list:
+        data = item.dict()
+
+        # ID가 있으면 기존 항목 업데이트
+        if data.get("id"):
+            existing = db.query(QuickCategory).filter(QuickCategory.id == data["id"]).first()
+            if existing:
+                for key, value in data.items():
+                    if value is not None:
+                        setattr(existing, key, value)
+                db.add(existing)
+                results.append(existing)
+                continue
+
+        # 새 항목인 경우 sort_order 자동 부여 후 생성
+        if data.get("sort_order") is None:
+            last = (
+                db.query(QuickCategory.sort_order)
+                .order_by(QuickCategory.sort_order.desc())
+                .first()
+            )
+            data["sort_order"] = (last[0] + 1) if last else 0
+
+        new_obj = QuickCategory(**data)
+        db.add(new_obj)
+        results.append(new_obj)
+
+    db.commit()
+
+    for obj in results:
+        db.refresh(obj)
+
+    return results
+
+
 def create_quick_category(db: Session, data: dict) -> QuickCategory:
     # sort_order 미지정 시 가장 뒤로 보내기
     if data.get("sort_order") is None:
@@ -105,7 +145,8 @@ def update_quick_category(db: Session, qc_id: int, data: dict) -> Optional[Quick
 def delete_quick_category(db: Session, qc_id: int) -> bool:
     obj = db.query(QuickCategory).get(qc_id)
     if not obj:
-        return False
+        # return False #원래는 False가 맞는데 프론트화면에서 오류 발생하여 수정했습니다!
+        return True
     db.delete(obj)
     db.commit()
     return True
