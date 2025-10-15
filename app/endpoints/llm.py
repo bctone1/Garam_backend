@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 from typing import Iterable, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,Form
 from sqlalchemy.orm import Session
 
 from crud import chat as crud_chat
@@ -12,6 +10,8 @@ from langchain_service.chain.qa_chain import make_qa_chain
 from langchain_service.embedding.get_vector import text_to_vector
 from langchain_service.llm.setup import get_llm
 from schemas.llm import ChatQARequest, QARequest, QAResponse, QASource
+from service.stt import transcribe_bytes
+from schemas.llm import STTResponse, STTQAParams
 
 router = APIRouter(tags=["LLM"])
 
@@ -76,7 +76,7 @@ def _run_qa(
         _update_last_user_vector(db, session_id, vector)
 
     try:
-        chain = make_qa_chain(db, get_llm, text_to_vector, knowledge_id=knowledge_id, top_k=top_k)
+        chain = make_qa_chain(db, get_llm, text_to_vector, knowledge_id=knowledge_id, top_k=top_k,)
     except RuntimeError as exc:  # active model 이 없을 때 등
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
@@ -124,3 +124,35 @@ def ask_global(payload: QARequest, db: Session = Depends(get_db)) -> QAResponse:
 @router.post("/qa/query", response_model=QAResponse)
 def ask_global_alias(payload: QARequest, db: Session = Depends(get_db)) -> QAResponse:
     return ask_global(payload, db)
+
+
+# STT 처리
+@router.post("/stt", response_model=STTResponse)
+async def stt(file: UploadFile = File(...), lang: str = Form("ko-KR")):
+    try:
+        text = transcribe_bytes(await file.read(), file.content_type or "", lang)
+        return STTResponse(text=text)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="empty transcription")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"stt failed: {e}")
+
+@router.post("/stt_qa", response_model=QAResponse)
+async def stt_qa(
+    file: UploadFile = File(...),
+    params: STTQAParams = Depends(STTQAParams.as_form),
+    db: Session = Depends(get_db),
+):
+    try:
+        text = transcribe_bytes(await file.read(), file.content_type or "", params.lang)
+        return _run_qa(
+            db,
+            question=text,
+            knowledge_id=params.knowledge_id,
+            top_k=params.top_k,
+            session_id=params.session_id,
+        )
+    except ValueError:
+        raise HTTPException(status_code=422, detail="empty transcription")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"stt failed: {e}")

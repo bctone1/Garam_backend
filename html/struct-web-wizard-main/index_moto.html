@@ -257,97 +257,6 @@
         box-shadow: none;
       }
 
-      .action-buttons {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .mic-button {
-        width: 52px;
-        height: 52px;
-        padding: 0;
-        border-radius: 50%;
-        border: 1px solid rgba(37, 99, 235, 0.25);
-        background: var(--bg-surface);
-        color: var(--accent);
-        font-size: 1.2rem;
-        font-weight: 600;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
-        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease, color 0.2s ease;
-      }
-
-      .mic-button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
-      }
-
-      .mic-button.recording {
-        background: rgba(248, 113, 113, 0.16);
-        border-color: rgba(248, 113, 113, 0.45);
-        color: #dc2626;
-        box-shadow: 0 12px 26px rgba(220, 38, 38, 0.28);
-        animation: recordingPulse 1.2s infinite ease-in-out;
-      }
-
-      .mic-button.processing {
-        pointer-events: none;
-        background: rgba(37, 99, 235, 0.12);
-        color: var(--accent);
-        box-shadow: none;
-      }
-
-      .mic-button[disabled] {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
-      }
-
-      .mic-button .mic-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: currentColor;
-        display: inline-block;
-      }
-
-      .mic-button .mic-label {
-        font-size: 0.7rem;
-        font-weight: 600;
-        margin-top: 2px;
-      }
-
-      .mic-button .mic-spinner {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        border: 2px solid rgba(37, 99, 235, 0.4);
-        border-top-color: var(--accent);
-        animation: spin 0.9s linear infinite;
-      }
-
-      .mic-button .mic-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-      }
-
-      @keyframes recordingPulse {
-        0%,
-        100% {
-          transform: translateY(0);
-          box-shadow: 0 12px 26px rgba(220, 38, 38, 0.18);
-        }
-        50% {
-          transform: translateY(-3px);
-          box-shadow: 0 16px 38px rgba(220, 38, 38, 0.28);
-        }
-      }
-
       .primary-button .spinner {
         width: 18px;
         height: 18px;
@@ -720,17 +629,9 @@
               id="messageInput"
               placeholder="메시지를 입력하고 Enter 키로 전송해보세요. 줄바꿈은 Shift + Enter"
             ></textarea>
-            <div class="action-buttons">
-              <button class="ghost-button mic-button" id="micButton" type="button" aria-pressed="false">
-                <span class="mic-content">
-                  <span aria-hidden="true">🎤</span>
-                  <span class="mic-label">음성</span>
-                </span>
-              </button>
-              <button class="primary-button" id="sendButton" type="button">
-                <span>전송</span>
-              </button>
-            </div>
+            <button class="primary-button" id="sendButton">
+              <span>전송</span>
+            </button>
           </div>
           <div class="footer-bottom">
             <div class="options">
@@ -769,7 +670,6 @@
         isSending: false,
         typingEl: null,
         previewUpdated: false,
-        isRecording: false,
       };
 
       const elements = {
@@ -788,7 +688,6 @@
         topKSelect: document.getElementById("topKSelect"),
         knowledgeSelect: document.getElementById("knowledgeSelect"),
         chatMain: document.getElementById("chatMain"),
-        micButton: document.getElementById("micButton"),
       };
 
       const STORAGE_KEYS = {
@@ -846,151 +745,6 @@
           elements.sendButton.innerHTML = '<span class="spinner"></span><span>전송 중...</span>';
         } else {
           elements.sendButton.innerHTML = "<span>전송</span>";
-        }
-      }
-
-      const audioState = {
-        stream: null,
-        recorder: null,
-        chunks: [],
-        timeoutId: null,
-        isProcessing: false,
-      };
-
-      function updateMicButtonUI() {
-        if (!elements.micButton) return;
-        elements.micButton.classList.toggle("recording", state.isRecording);
-        elements.micButton.classList.toggle("processing", audioState.isProcessing);
-        if (audioState.isProcessing) {
-          elements.micButton.innerHTML = `
-            <span class="mic-content">
-              <span class="mic-spinner" aria-hidden="true"></span>
-              <span class="mic-label">처리 중</span>
-            </span>
-          `;
-          elements.micButton.setAttribute("aria-pressed", "false");
-          elements.micButton.disabled = true;
-          return;
-        }
-        if (state.isRecording) {
-          elements.micButton.innerHTML = `
-            <span class="mic-content">
-              <span class="mic-dot" aria-hidden="true"></span>
-              <span class="mic-label">녹음 중</span>
-            </span>
-          `;
-          elements.micButton.setAttribute("aria-pressed", "true");
-        } else {
-          elements.micButton.innerHTML = `
-            <span class="mic-content">
-              <span aria-hidden="true">🎤</span>
-              <span class="mic-label">음성</span>
-            </span>
-          `;
-          elements.micButton.setAttribute("aria-pressed", "false");
-        }
-        elements.micButton.disabled = false;
-      }
-
-      async function ensureAudioStream() {
-        if (audioState.stream) return audioState.stream;
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error("이 브라우저에서는 마이크를 사용할 수 없습니다.");
-        }
-        audioState.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        return audioState.stream;
-      }
-
-      function stopRecording() {
-        if (audioState.timeoutId) {
-          clearTimeout(audioState.timeoutId);
-          audioState.timeoutId = null;
-        }
-        if (audioState.recorder && audioState.recorder.state === "recording") {
-          audioState.recorder.stop();
-        }
-      }
-
-      async function handleRecordingStop(mimeType) {
-        if (audioState.timeoutId) {
-          clearTimeout(audioState.timeoutId);
-          audioState.timeoutId = null;
-        }
-        state.isRecording = false;
-        updateMicButtonUI();
-        if (!audioState.chunks.length) {
-          audioState.recorder = null;
-          return;
-        }
-        audioState.isProcessing = true;
-        updateMicButtonUI();
-        const blob = new Blob(audioState.chunks, { type: mimeType || "audio/webm" });
-        const extension = mimeType && mimeType.includes("mp4") ? "mp4" : mimeType && mimeType.includes("mpeg") ? "mp3" : "webm";
-        const formData = new FormData();
-        formData.append("file", blob, `recording.${extension}`);
-        try {
-          const response = await fetch(`${state.baseUrl}/stt`, {
-            method: "POST",
-            body: formData,
-          });
-          if (!response.ok) {
-            const message = await parseError(response);
-            throw new Error(message || "음성 인식 요청에 실패했습니다.");
-          }
-          const data = await response.json();
-          const text = data?.text?.trim?.();
-          if (text) {
-            if (state.isSending) {
-              showToast("이전 메시지를 처리 중입니다. 잠시 후 다시 시도해주세요.", "warning");
-              elements.messageInput.value = text;
-            } else {
-              elements.messageInput.value = text;
-              elements.messageInput.focus();
-              await handleSend();
-            }
-          } else {
-            showToast("음성을 인식하지 못했습니다.", "warning");
-          }
-        } catch (error) {
-          console.error("STT 오류", error);
-          showToast(error.message || "음성을 텍스트로 변환하지 못했습니다.", "error");
-        } finally {
-          audioState.isProcessing = false;
-          audioState.chunks = [];
-          audioState.recorder = null;
-          updateMicButtonUI();
-        }
-      }
-
-      async function startRecording() {
-        if (!state.baseUrl) {
-          showToast("먼저 API 주소를 설정해주세요.", "warning");
-          return;
-        }
-        try {
-          const stream = await ensureAudioStream();
-          audioState.chunks = [];
-          const recorder = new MediaRecorder(stream);
-          recorder.ondataavailable = (event) => {
-            if (event.data && event.data.size > 0) {
-              audioState.chunks.push(event.data);
-            }
-          };
-          recorder.onstop = () => handleRecordingStop(recorder.mimeType);
-          recorder.start();
-          audioState.recorder = recorder;
-          state.isRecording = true;
-          updateMicButtonUI();
-          audioState.timeoutId = window.setTimeout(() => {
-            if (audioState.recorder && audioState.recorder.state === "recording") {
-              audioState.recorder.stop();
-            }
-          }, 6000);
-        } catch (error) {
-          console.error("녹음 시작 오류", error);
-          showToast(error.message || "마이크를 활성화하지 못했습니다.", "error");
-          state.isRecording = false;
-          updateMicButtonUI();
         }
       }
 
@@ -1265,17 +1019,6 @@
         }
       });
 
-      if (elements.micButton) {
-        elements.micButton.addEventListener("click", () => {
-          if (audioState.isProcessing) return;
-          if (state.isRecording) {
-            stopRecording();
-          } else {
-            startRecording();
-          }
-        });
-      }
-
       elements.checkConnectionButton.addEventListener("click", () => {
         checkConnection();
       });
@@ -1326,7 +1069,6 @@
       restorePreferences();
       updateEmptyState();
       updateSessionDisplay();
-      updateMicButtonUI();
       if (state.baseUrl) {
         checkConnection();
       }
