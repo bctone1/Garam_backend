@@ -1,4 +1,3 @@
-# langchain_service/chain/qa_chain.py
 from operator import itemgetter
 from typing import Optional, Callable
 from sqlalchemy.orm import Session
@@ -6,6 +5,10 @@ from sqlalchemy.orm import Session
 from langchain_core.runnables import RunnableLambda, RunnableMap
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+
+# session 안에서의 대화내용을 기억하면서 대화하기
+# from langchain_core.runnables.history import RunnableWithMessageHistory
+# from langchain_core.chat_history import InMemoryChatMessageHistory
 
 from crud import model as crud_model
 from crud.knowledge import search_chunks_by_vector
@@ -63,7 +66,6 @@ def make_qa_chain(
         "질문: {question}")
     ])
 
-    # llm = get_llm(**llm_params(m.fast_response_mode))
 
     params = llm_params(m.fast_response_mode)
     provider = getattr(config, "LLM_PROVIDER", "openai")
