@@ -46,18 +46,27 @@ class SystemSettingResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 # ----- QuickCategory -----
+
 class QuickCategoryBase(BaseModel):
+    id: Optional[int] = None  # ✅ 기존 항목 업데이트용
     icon_emoji: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
     sort_order: Optional[int] = Field(default=None, ge=0)
 
+
 class QuickCategoryCreate(QuickCategoryBase):
-    icon_emoji: str
-    name: str
+    """
+    업서트용으로도 사용 가능하게 변경:
+    - id는 선택적 (없으면 새로 생성)
+    - name/icon_emoji도 선택 가능 (기존 항목 수정 시 일부 필드만 변경 허용)
+    """
+    pass
+
 
 class QuickCategoryUpdate(QuickCategoryBase):
     pass
+
 
 class QuickCategoryResponse(BaseModel):
     id: int

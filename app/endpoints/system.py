@@ -54,6 +54,14 @@ def list_quick_categories(
 ):
     return crud.list_quick_categories(db, offset=offset, limit=limit)
 
+@router.post(
+    "/quick-categories-list",
+    response_model=List[QuickCategoryResponse],
+    status_code=status.HTTP_201_CREATED
+)
+def upsert_quick_categories(payload: List[QuickCategoryCreate], db: Session = Depends(get_db)):
+    return crud.upsert_quick_categories(db, payload)
+
 
 @router.post("/quick-categories", response_model=QuickCategoryResponse, status_code=status.HTTP_201_CREATED)
 def create_quick_category(payload: QuickCategoryCreate, db: Session = Depends(get_db)):
