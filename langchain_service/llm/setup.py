@@ -26,9 +26,16 @@ def get_llm(provider: str = "openai", model: str | None = None,
         )
 
     elif provider in ("friendli", "lgai", "EXAONE"):
-        key = _pick_key(api_key, getattr(config, "FRIENDLI_API", None))
+        key = _pick_key(
+            api_key,
+            getattr(config, "FRIENDLI_API", None),
+            getattr(config, "FRIENDLI_TOKEN", None),
+            os.getenv("FRIENDLI_API"),
+            os.getenv("FRIENDLI_TOKEN"),
+        )
         if not key:
-            raise RuntimeError("FRIENDLI_API 키가 설정되지 않았습니다.")
+            raise RuntimeError("Friendli API 키가 설정되지 않았습니다. FRIENDLI_API 또는 FRIENDLI_TOKEN을 설정하세요.")
+
         return ChatOpenAI(
             model= model or config.LLM_MODEL,   # endpoint_id
             api_key=key,
