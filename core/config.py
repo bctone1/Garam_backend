@@ -23,6 +23,11 @@ FRIENDLI_API = os.getenv("FRIENDLI_API")
 EMBEDDING_API = os.getenv("EMBEDDING_API")
 SEARCH_API = os.getenv("SEARCH_API")
 
+CLOVA_STT_ID= os.getenv("CLOVA_STT_ID")
+CLOVA_STT_SECRET= os.getenv("CLOVA_STT_SECRET")
+
+
+
 # 4) LangSmith
 LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING")  # 문자열 "true"/"false"
 LANGSMITH_ENDPOINT = os.getenv("LANGSMITH_ENDPOINT")

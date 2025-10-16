@@ -1,17 +1,21 @@
-# clova stt api 공식문서 예제코드
-## 실시간 스트리밍 인식
-
 import grpc
 import json
-
+import pyaudio
 import nest_pb2
 import nest_pb2_grpc
+from core import config
+import base64
+CLIENT_SECRET = config.CLOVA_STT_SECRET
+CLIENT_ID = config.CLOVA_STT_ID
 
-AUDIO_PATH = "path/to/audio/file"   #인식할 오디오 파일이 위치한 경로를 입력해 주십시오. (16kHz, 1channel, 16 bits per sample의 PCM (헤더가 없는 raw wave) 형식)
-CLIENT_SECRET = "장문인식 secretKey"
+# 마이크 설정 (클로바 STT 요구사항: 16kHz, 16bit, mono)
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+RATE = 16000
+CHUNK = 32000  # 약 2초 분량 (16bit 샘플이라 1샘플=2바이트)
 
-def generate_requests(audio_path):
-    # 초기 설정 요청: 음성 인식 설정
+def generate_requests():
+    # 초기 config 요청
     yield nest_pb2.NestRequest(
         type=nest_pb2.RequestType.CONFIG,
         config=nest_pb2.NestConfig(
@@ -19,39 +23,49 @@ def generate_requests(audio_path):
         )
     )
 
-    # 오디오 파일을 열고 32,000 바이트씩 읽음
-    with open(audio_path, "rb") as audio_file:
+    audio = pyaudio.PyAudio()
+    stream = audio.open(format=FORMAT,
+                        channels=CHANNELS,
+                        rate=RATE,
+                        input=True,
+                        frames_per_buffer=CHUNK // 2)  # CHUNK byte 기준이기에 2로 나눔
+
+    print("Listening...")
+
+    try:
         while True:
-            chunk = audio_file.read(32000)  # 오디오 파일의 청크를 읽음
-            if not chunk:
-                break  # 데이터가 더 이상 없으면 루프 종료
+            data = stream.read(CHUNK // 2, exception_on_overflow=False)
+            if not data:
+                break
             yield nest_pb2.NestRequest(
                 type=nest_pb2.RequestType.DATA,
                 data=nest_pb2.NestData(
-                    chunk=chunk,
+                    chunk=data,
                     extra_contents=json.dumps({"seqId": 0, "epFlag": False})
                 )
             )
+    finally:
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
 
 def main():
-    # Clova Speech 서버에 대한 보안 gRPC 채널을 설정
     channel = grpc.secure_channel(
         "clovaspeech-gw.ncloud.com:50051",
         grpc.ssl_channel_credentials()
     )
-    stub = nest_pb2_grpc.NestServiceStub(channel)  # NestService에 대한 stub 생성
-    metadata = (("authorization", f"Bearer {CLIENT_SECRET}"),)  # 인증 토큰과 함께 메타데이터 설정
-    responses = stub.recognize(generate_requests(AUDIO_PATH), metadata=metadata)  # 생성된 요청으로 인식(recognize) 메서드 호출
+    stub = nest_pb2_grpc.NestServiceStub(channel)
+    auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
+    metadata = (("authorization", f"Basic {auth}"),)
+
+    responses = stub.recognize(generate_requests(), metadata=metadata)
 
     try:
-        # 서버로부터 응답을 반복 처리
         for response in responses:
-            print("Received response: " + response.contents)
+            print(responses)
+            print("Received response:", response.contents)
     except grpc.RpcError as e:
-        # gRPC 오류 처리
         print(f"Error: {e.details()}")
     finally:
-        channel.close()  # 작업이 끝나면 채널 닫기
+        channel.close()
 
-if __name__ == "__main__":
-    main()
