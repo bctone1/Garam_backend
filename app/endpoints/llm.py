@@ -13,7 +13,7 @@ from schemas.llm import ChatQARequest, QARequest, QAResponse, QASource
 from service.stt import transcribe_bytes
 from schemas.llm import STTResponse, STTQAParams
 
-router = APIRouter(prefix="/llm", tags=["LLM"])
+router = APIRouter(tags=["LLM"])
 
 
 def _ensure_session(db: Session, session_id: int) -> None:
@@ -94,8 +94,10 @@ def _run_qa(
         documents=sources,
     )
 
+## 추후 아래로 변경
+# @router.post("sessions/{session_id}/qa", response_model=QAResponse)
 
-@router.post("/sessions/{session_id}/qa", response_model=QAResponse)
+@router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse)
 def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depends(get_db)) -> QAResponse:
     _ensure_session(db, session_id)
     return _run_qa(
