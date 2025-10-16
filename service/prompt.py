@@ -1,6 +1,5 @@
 # 우선 META LLM MSP에서 넘어옴
 
-
 import json
 
 # from langchain_service.langsmith import logging
@@ -11,10 +10,6 @@ from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 import os
 
-
-# import re
-# from fastapi.responses import JSONResponse
-# logging.langsmith("Garam_RAG")
 
 llm = ChatOpenAI(
     model='gpt-4o', temperature=0,
