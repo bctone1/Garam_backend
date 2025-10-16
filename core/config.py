@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-
+import base64
 # 0) .env 로드
 load_dotenv()
 
@@ -26,7 +26,12 @@ SEARCH_API = os.getenv("SEARCH_API")
 CLOVA_STT_ID= os.getenv("CLOVA_STT_ID")
 CLOVA_STT_SECRET= os.getenv("CLOVA_STT_SECRET")
 
+if not CLOVA_STT_ID or not CLOVA_STT_SECRET:
+    raise ValueError("❌ CLOVA_STT_ID 또는 CLOVA_STT_SECRET이 설정되지 않았습니다. .env를 확인하세요.")
 
+# 인증 헤더용 Base64 토큰 생성
+AUTH_TOKEN = base64.b64encode(f"{CLOVA_STT_ID}:{CLOVA_STT_SECRET}".encode()).decode()
+AUTH_HEADER = ("authorization", f"Basic {AUTH_TOKEN}")
 
 # 4) LangSmith
 LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING")  # 문자열 "true"/"false"
