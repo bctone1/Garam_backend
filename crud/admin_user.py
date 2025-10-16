@@ -1,5 +1,3 @@
-# DB 접근 로직
-
 from typing import Optional, List
 from sqlalchemy import select, update as sa_update, delete as sa_delete
 from sqlalchemy.orm import Session
