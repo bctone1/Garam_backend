@@ -12,6 +12,7 @@ from langchain_service.llm.setup import get_llm
 from schemas.llm import ChatQARequest, QARequest, QAResponse, QASource
 from service.stt import transcribe_bytes
 from schemas.llm import STTResponse, STTQAParams
+import os, tempfile, subprocess, shutil, requests
 
 router = APIRouter(tags=["LLM"])
 
@@ -147,6 +148,82 @@ async def stt_qa(
 ):
     try:
         text = transcribe_bytes(await file.read(), file.content_type or "", params.lang)
+        return _run_qa(
+            db,
+            question=text,
+            knowledge_id=params.knowledge_id,
+            top_k=params.top_k,
+            session_id=params.session_id,
+        )
+    except ValueError:
+        raise HTTPException(status_code=422, detail="empty transcription")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"stt failed: {e}")
+
+## Clova STT 활용 ##
+CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
+def _ensure_wav_16k_mono(data: bytes, content_type: str) -> bytes:
+    if content_type in ("audio/wav", "audio/x-wav"):
+        return data
+    if not shutil.which("ffmpeg"):
+        return data  # ffmpeg 없으면 원본 전달
+    with tempfile.NamedTemporaryFile(delete=False) as raw:
+        raw.write(data); raw.flush()
+        wav_path = raw.name + ".wav"
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", raw.name, "-ac", "1", "-ar", "16000", wav_path],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        with open(wav_path, "rb") as f:
+            return f.read()
+    finally:
+        try: os.remove(raw.name)
+        except: pass
+        try: os.remove(wav_path)
+        except: pass
+
+def _clova_transcribe(data: bytes, lang: str) -> str:
+    cid = os.getenv("CLOVA_STT_ID")
+    csec = os.getenv("CLOVA_STT_SECRET")
+    if not cid or not csec:
+        raise RuntimeError("CLOVA_STT_ID/CLOVA_STT_SECRET 미설정")
+    headers = {
+        "X-NCP-APIGW-API-KEY-ID": cid,
+        "X-NCP-APIGW-API-KEY": csec,
+        "Content-Type": "application/octet-stream",
+    }
+    url = f"{CLOVA_STT_URL}?lang={lang or 'ko-KR'}"
+    r = requests.post(url, headers=headers, data=data, timeout=30)
+    if r.status_code != 200:
+        raise RuntimeError(f"clova stt {r.status_code}: {r.text[:200]}")
+    text = r.json().get("text", "").strip()
+    if not text:
+        raise ValueError("empty transcription")
+    return text
+
+@router.post("/clova_stt", response_model=STTResponse)
+async def clova_stt(file: UploadFile = File(...), lang: str = "ko-KR"):
+    try:
+        b = await file.read()
+        wav = _ensure_wav_16k_mono(b, file.content_type or "")
+        text = _clova_transcribe(wav, lang)
+        return STTResponse(text=text)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="empty transcription")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"stt failed: {e}")
+
+@router.post("/clova_stt_qa", response_model=QAResponse)
+async def clova_stt_qa(
+    file: UploadFile = File(...),
+    params: STTQAParams = Depends(STTQAParams.as_form),
+    db: Session = Depends(get_db),
+):
+    try:
+        b = await file.read()
+        wav = _ensure_wav_16k_mono(b, file.content_type or "")
+        text = _clova_transcribe(wav, params.lang)
         return _run_qa(
             db,
             question=text,
