@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Iterable, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from crud import chat as crud_chat
@@ -15,7 +15,7 @@ from schemas.llm import STTResponse, STTQAParams
 import os, tempfile, subprocess, shutil, requests
 
 router = APIRouter(tags=["LLM"])
-
+CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
 
 def _ensure_session(db: Session, session_id: int) -> None:
     if not crud_chat.get_session(db, session_id):
@@ -71,19 +71,29 @@ def _run_qa(
     knowledge_id: Optional[int],
     top_k: int,
     session_id: Optional[int] = None,
+    policy_flags: Optional[dict] = None,
+    style: Optional[str] = None,
 ) -> QAResponse:
     vector = _to_vector(question)
     if session_id is not None:
         _update_last_user_vector(db, session_id, vector)
 
     try:
-        chain = make_qa_chain(db, get_llm, text_to_vector, knowledge_id=knowledge_id, top_k=top_k,)
-    except RuntimeError as exc:  # active model 이 없을 때 등
+        chain = make_qa_chain(
+            db,
+            get_llm,
+            text_to_vector,
+            knowledge_id=knowledge_id,
+            top_k=top_k,
+            policy_flags=policy_flags or {},
+            style=style or "friendly",
+        )
+    except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     try:
         answer = chain.invoke({"question": question})
-    except Exception as exc:  # pragma: no cover - 외부 LLM 예외 래핑
+    except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="LLM 호출에 실패했습니다.") from exc
 
     sources = _build_sources(db, vector, knowledge_id, top_k)
@@ -95,23 +105,41 @@ def _run_qa(
         documents=sources,
     )
 
-## 추후 아래로 변경
-# @router.post("sessions/{session_id}/qa", response_model=QAResponse)
 
 @router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse)
 def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depends(get_db)) -> QAResponse:
     _ensure_session(db, session_id)
+    flags = {
+        k: v
+        for k, v in {
+            "block_inappropriate": payload.block_inappropriate,
+            "restrict_non_tech": payload.restrict_non_tech,
+            "suggest_agent_handoff": payload.suggest_agent_handoff,
+        }.items()
+        if v is not None
+    }
     return _run_qa(
         db,
         question=payload.question,
         knowledge_id=payload.knowledge_id,
         top_k=payload.top_k,
         session_id=session_id,
+        policy_flags=flags,
+        style=payload.style,
     )
 
 
 @router.post("/qa", response_model=QAResponse)
 def ask_global(payload: QARequest, db: Session = Depends(get_db)) -> QAResponse:
+    flags = {
+        k: v
+        for k, v in {
+            "block_inappropriate": payload.block_inappropriate,
+            "restrict_non_tech": payload.restrict_non_tech,
+            "suggest_agent_handoff": payload.suggest_agent_handoff,
+        }.items()
+        if v is not None
+    }
     session_id = payload.session_id
     if session_id is not None:
         _ensure_session(db, session_id)
@@ -121,6 +149,8 @@ def ask_global(payload: QARequest, db: Session = Depends(get_db)) -> QAResponse:
         knowledge_id=payload.knowledge_id,
         top_k=payload.top_k,
         session_id=session_id,
+        policy_flags=flags,
+        style=payload.style,
     )
 
 
@@ -140,6 +170,7 @@ async def stt(file: UploadFile = File(...), lang: str = Form("ko-KR")):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"stt failed: {e}")
 
+
 @router.post("/stt_qa", response_model=QAResponse)
 async def stt_qa(
     file: UploadFile = File(...),
@@ -147,43 +178,67 @@ async def stt_qa(
     db: Session = Depends(get_db),
 ):
     try:
+        # STT로 text 얻기
         text = transcribe_bytes(await file.read(), file.content_type or "", params.lang)
+        flags = {
+            k: v
+            for k, v in {
+                "block_inappropriate": params.block_inappropriate,
+                "restrict_non_tech": params.restrict_non_tech,
+                "suggest_agent_handoff": params.suggest_agent_handoff,
+            }.items()
+            if v is not None
+        }
         return _run_qa(
             db,
             question=text,
             knowledge_id=params.knowledge_id,
             top_k=params.top_k,
             session_id=params.session_id,
+            policy_flags=flags,
+            style=params.style,
         )
     except ValueError:
         raise HTTPException(status_code=422, detail="empty transcription")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"stt failed: {e}")
 
+
 ## Clova STT 활용 ##
-CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
+
+
 def _ensure_wav_16k_mono(data: bytes, content_type: str) -> bytes:
     if content_type in ("audio/wav", "audio/x-wav"):
         return data
     if not shutil.which("ffmpeg"):
         return data  # ffmpeg 없으면 원본 전달
     with tempfile.NamedTemporaryFile(delete=False) as raw:
-        raw.write(data); raw.flush()
+        raw.write(data)
+        raw.flush()
         wav_path = raw.name + ".wav"
     try:
         subprocess.run(
             ["ffmpeg", "-y", "-i", raw.name, "-ac", "1", "-ar", "16000", wav_path],
-            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         with open(wav_path, "rb") as f:
             return f.read()
     finally:
-        try: os.remove(raw.name)
-        except: pass
-        try: os.remove(wav_path)
-        except: pass
+        try:
+            os.remove(raw.name)
+        except:
+            pass
+        try:
+            os.remove(wav_path)
+        except:
+            pass
+
 
 def _clova_transcribe(data: bytes, lang: str) -> str:
+    if not CLOVA_STT_URL:
+        raise RuntimeError("CLOVA_STT_URL 미설정")
     cid = os.getenv("CLOVA_STT_ID")
     csec = os.getenv("CLOVA_STT_SECRET")
     if not cid or not csec:
@@ -202,8 +257,9 @@ def _clova_transcribe(data: bytes, lang: str) -> str:
         raise ValueError("empty transcription")
     return text
 
+
 @router.post("/clova_stt", response_model=STTResponse)
-async def clova_stt(file: UploadFile = File(...), lang: str = "ko-KR"):
+async def clova_stt(file: UploadFile = File(...), lang: str = Form("ko-KR")):
     try:
         b = await file.read()
         wav = _ensure_wav_16k_mono(b, file.content_type or "")
@@ -213,6 +269,7 @@ async def clova_stt(file: UploadFile = File(...), lang: str = "ko-KR"):
         raise HTTPException(status_code=422, detail="empty transcription")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"stt failed: {e}")
+
 
 @router.post("/clova_stt_qa", response_model=QAResponse)
 async def clova_stt_qa(
@@ -224,12 +281,23 @@ async def clova_stt_qa(
         b = await file.read()
         wav = _ensure_wav_16k_mono(b, file.content_type or "")
         text = _clova_transcribe(wav, params.lang)
+        flags = {
+            k: v
+            for k, v in {
+                "block_inappropriate": params.block_inappropriate,
+                "restrict_non_tech": params.restrict_non_tech,
+                "suggest_agent_handoff": params.suggest_agent_handoff,
+            }.items()
+            if v is not None
+        }
         return _run_qa(
             db,
             question=text,
             knowledge_id=params.knowledge_id,
             top_k=params.top_k,
             session_id=params.session_id,
+            policy_flags=flags,
+            style=params.style,
         )
     except ValueError:
         raise HTTPException(status_code=422, detail="empty transcription")
