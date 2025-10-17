@@ -36,5 +36,4 @@ friendli-client
 
 speechRecognition
 pyaudio
-
-
+openai-whisper

@@ -13,7 +13,7 @@ CLIENT_ID = os.getenv("CLOVA_STT_ID")
 CLIENT_SECRET = os.getenv("CLOVA_STT_SECRET")
 
 if not CLIENT_ID or not CLIENT_SECRET:
-    raise ValueError("❌ CLOVA_STT_ID 또는 CLOVA_STT_SECRET이 설정되지 않았습니다 (.env 확인).")
+    raise ValueError("❌ CLOVA_STT_ID 또는 CLOVA_STT_SECRET이 설정되지 않았습니다.")
 
 # ─────────────────────────────
 # ② CSR API 설정

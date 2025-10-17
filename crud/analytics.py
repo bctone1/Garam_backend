@@ -45,6 +45,7 @@ def get_dashboard_metrics(db, *, start=None, end=None):
         select(func.count()).select_from(Inquiry)
         .where(Inquiry.status == "completed", *iqc_cond)
     ) or 0
+    # 해결률
     resolution_rate = (inq_completed_in_cohort / inq_total) if inq_total else 0.0
 
     csat_rate = db.scalar(
