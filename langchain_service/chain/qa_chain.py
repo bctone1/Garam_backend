@@ -12,7 +12,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from crud import model as crud_model
 from crud.knowledge import search_chunks_by_vector
-from langchain_service.prompt.style import build_system_prompt, llm_params
+from langchain_service.prompt.style import build_system_prompt, llm_params, STYLE_MAP
 from core import config
 
 
@@ -23,6 +23,8 @@ def make_qa_chain(
     *,
     knowledge_id: Optional[int] = None,
     top_k: int = 8,
+    policy_flags: dict | None = None,
+    style: str = "friendly",
     max_ctx_chars: int = 12000,     # max context characters : context를 이 글자수로 잘라 LLM에 넣음/많으면 누락 감소 비용증가
     restrict_to_kb: bool = True,    # knowledge base 약자 : 찾은 context 근거로만 답함
 ):
@@ -30,12 +32,8 @@ def make_qa_chain(
     if not m:
         raise RuntimeError("model not initialized")
 
-    system_txt = build_system_prompt(
-        style=m.response_style,
-        block_inappropriate=m.block_inappropriate,
-        restrict_non_tech=m.restrict_non_tech,
-        suggest_agent_handoff=m.suggest_agent_handoff,
-    )
+    style = style if style in STYLE_MAP else "friendly"  # 안전 보정
+    system_txt = build_system_prompt(style=style, **(policy_flags or {}))
 
     # LLM 답변 범위 규정
     guard_msg = (

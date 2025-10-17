@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel, Field, conint
 from fastapi import Form
+
+StyleLiteral = Literal['professional','friendly','concise']
 
 class QARequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4000)
@@ -31,8 +33,34 @@ class QAResponse(BaseModel):
     sources: list[QASource] = Field(default_factory=list)
     documents: list[QASource] = Field(default_factory=list)
 
+## 응답 설정
+class PolicyFlags(BaseModel):
+    block_inappropriate: Optional[bool] = None
+    restrict_non_tech: Optional[bool] = None
+    suggest_agent_handoff: Optional[bool] = None
+
+class ChatQARequest(PolicyFlags):
+    question: str
+    knowledge_id: Optional[int] = None
+    top_k: int = 5
+    style: Optional[StyleLiteral] = None
+
+class QARequest(PolicyFlags):
+    question: str
+    knowledge_id: Optional[int] = None
+    top_k: int = 5
+    session_id: Optional[int] = None
+    style: Optional[StyleLiteral] = None
+
+class STTQAParams(PolicyFlags):
+    knowledge_id: Optional[int] = None
+    top_k: int = 5
+    session_id: Optional[int] = None
+    lang: str = "ko-KR"
+    style: Optional[StyleLiteral] = None
 
 
+## STT
 class STTResponse(BaseModel):
     text: str
 
@@ -51,3 +79,4 @@ class STTQAParams(BaseModel):
         session_id: Optional[int] = Form(None),
     ):
         return cls(lang=lang, knowledge_id=knowledge_id, top_k=top_k, session_id=session_id)
+
