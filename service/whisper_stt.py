@@ -8,7 +8,7 @@ from openai import OpenAI
 # ─────────────────────────────
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API")
-LANG = os.getenv("LANG", "ko")
+LANG = "ko"
 DURATION = int(os.getenv("DURATION", "5"))
 
 if not API_KEY:
@@ -61,6 +61,8 @@ def transcribe_with_whisper(wav_bytes: bytes, *, language: str = "ko") -> str:
     )
     return resp.text.strip()
 
+
+## 마이크 테스트 용도
 def main():
     audio_bytes = record_audio_to_wav_bytes(DURATION)
     text = transcribe_with_whisper(audio_bytes, language=LANG)

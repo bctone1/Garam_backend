@@ -73,6 +73,8 @@ def send_to_clova(audio_bytes: bytes):
         print(f"❌ 오류 코드: {response.status_code}")
         print(response.text)
 
+
+## 마이크 테스트 용도
 def main():
     audio_bytes = record_audio_to_bytes()
     send_to_clova(audio_bytes)
