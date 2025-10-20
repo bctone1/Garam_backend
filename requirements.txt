@@ -37,3 +37,4 @@ friendli-client
 speechRecognition
 pyaudio
 openai-whisper
+langchain_huggingface
