@@ -51,10 +51,10 @@ def transcribe_with_whisper(wav_bytes: bytes, *, language: str = "ko") -> str:
     client = OpenAI(api_key=API_KEY)
     # file-like 객체로 전달
     file_like = io.BytesIO(wav_bytes)
-    file_like.name = "audio.wav"  # 확장자 힌트 중요
-
+    file_like.name = "audio.wav"  # 확장자 힌트
     resp = client.audio.transcriptions.create(
-        model="whisper-1",
+        # model="whisper-1", 
+        model="large-v3-turbo",
         file=file_like,
         language=language,     # 언어 고정. 자동 감지 원하면 제거
         response_format="json" # 기본값
