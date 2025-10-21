@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from sys import flags
 from typing import Iterable, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
@@ -14,7 +16,10 @@ from service.stt import transcribe_bytes
 from schemas.llm import STTResponse, STTQAParams
 import os, tempfile, subprocess, shutil, requests
 
-router = APIRouter(tags=["LLM"])
+# router = APIRouter(tags=["LLM"])
+router = APIRouter(prefix="/llm", tags=["LLM"])
+
+
 CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
 
 def _ensure_session(db: Session, session_id: int) -> None:
@@ -180,15 +185,11 @@ async def stt_qa(
     try:
         # STT로 text 얻기
         text = transcribe_bytes(await file.read(), file.content_type or "", params.lang)
-        flags = {
-            k: v
-            for k, v in {
-                "block_inappropriate": params.block_inappropriate,
-                "restrict_non_tech": params.restrict_non_tech,
-                "suggest_agent_handoff": params.suggest_agent_handoff,
-            }.items()
-            if v is not None
-        }
+        flags={}
+        for k in ("block_inappropriate", "restrict_non_tech", "suggest_agent_handoff"):
+            v = getattr(params, k, None)  # 없으면 None
+            if v is not None:
+                flags[k] = v
         return _run_qa(
             db,
             question=text,
@@ -205,8 +206,6 @@ async def stt_qa(
 
 
 ## Clova STT 활용 ##
-
-
 def _ensure_wav_16k_mono(data: bytes, content_type: str) -> bytes:
     if content_type in ("audio/wav", "audio/x-wav"):
         return data
@@ -281,15 +280,11 @@ async def clova_stt_qa(
         b = await file.read()
         wav = _ensure_wav_16k_mono(b, file.content_type or "")
         text = _clova_transcribe(wav, params.lang)
-        flags = {
-            k: v
-            for k, v in {
-                "block_inappropriate": params.block_inappropriate,
-                "restrict_non_tech": params.restrict_non_tech,
-                "suggest_agent_handoff": params.suggest_agent_handoff,
-            }.items()
-            if v is not None
-        }
+        flags = {}
+        for k in ("block_inappropriate", "restrict_non_tech", "suggest_agent_handoff"):
+            v = getattr(params, k, None)  # 없으면 None
+            if v is not None:
+                flags[k] = v
         return _run_qa(
             db,
             question=text,
