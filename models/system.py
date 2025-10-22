@@ -2,7 +2,6 @@
 from sqlalchemy import (
     Column, BigInteger, Integer, Text, DateTime, ForeignKey,
     CheckConstraint, Index, func, text)
-from sqlalchemy.orm import relationship
 from database.base import Base
 
 
@@ -56,6 +55,16 @@ class QuickCategory(Base):
         Index("idx_qc_order", "sort_order"),  # 필요하면 sort_order 단일 인덱스로 교체
     )
 
+class QuickCategoryItem(Base):
+    __tablename__ = "quick_category_item"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    quick_category_id = Column(
+        BigInteger, ForeignKey(QuickCategory.id, ondelete="CASCADE"), nullable=False)
+    name = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
 
-__all__ = ["SystemSetting", "QuickCategory"]
+
+
+
+__all__ = ["SystemSetting", "QuickCategory", "QuickCategoryItem"]
 
