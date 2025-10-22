@@ -47,8 +47,6 @@ class QuickCategory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    # 관계
-    # setting = relationship("SystemSetting", backref="quick_categories", passive_deletes=True)
 
     __table_args__ = (
         CheckConstraint("sort_order >= 0", name="chk_qc_sort_nonneg"),
@@ -57,13 +55,12 @@ class QuickCategory(Base):
 
 class QuickCategoryItem(Base):
     __tablename__ = "quick_category_item"
+
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     quick_category_id = Column(
         BigInteger, ForeignKey(QuickCategory.id, ondelete="CASCADE"), nullable=False)
     name = Column(Text, nullable=False)
     description = Column(Text, nullable=True)
-
-
 
 
 __all__ = ["SystemSetting", "QuickCategory", "QuickCategoryItem"]

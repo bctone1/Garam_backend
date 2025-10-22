@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Optional, Iterable
 from sqlalchemy.orm import Session
 from sqlalchemy import case, select
-from models.system import SystemSetting, QuickCategory
-from schemas.system import QuickCategoryCreate
+from models.system import SystemSetting, QuickCategory, QuickCategoryItem
+from schemas.system import QuickCategoryCreate, QuickCategoryItemResponse
 
 
 # ========== SystemSetting (싱글톤) ==========
@@ -185,3 +185,50 @@ def normalize_quick_category_order(db: Session) -> int:
         db.add(row)
     db.commit()
     return len(rows)
+
+# 생성 POST /system/quick-categories/{qc_id}/items
+def create_quick_category_item(db: Session, qc_id: int, data: dict) -> QuickCategoryItem:
+    obj = QuickCategoryItem(
+        quick_category_id=qc_id,
+        name=data.get("name"),
+        description=data.get("description"),
+    )
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+# 단건 조회 GET /system/quick-category-items/{item_id}
+def get_quick_category_item(db: Session, item_id: int) -> QuickCategoryItem | None:
+    return db.get(QuickCategoryItem, item_id)
+
+# 카테고리 목록 GET /system/quick-categories/{qc_id}/items
+def list_quick_category_items(db: Session, qc_id: int, offset: int = 0, limit: int = 200) -> list[QuickCategoryItem]:
+    stmt = (
+        select(QuickCategoryItem)
+        .where(QuickCategoryItem.quick_category_id == qc_id)
+        .offset(offset).limit(limit)
+    )
+    return list(db.scalars(stmt))
+
+# 수정 PATCH /system/quick-category-items/{item_id}
+def update_quick_category_item(db: Session, item_id: int, data: dict) -> QuickCategoryItem | None:
+    obj = db.get(QuickCategoryItem, item_id)
+    if not obj:
+        return None
+    if "name" in data: obj.name = data["name"]
+    if "description" in data: obj.description = data["description"]
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+# 삭제 DELETE /system/quick-category-items/{item_id}
+def delete_quick_category_item(db: Session, item_id: int) -> bool:
+    obj = db.get(QuickCategoryItem, item_id)
+    if not obj:
+        return False
+    db.delete(obj)
+    db.commit()
+    return True
+
+

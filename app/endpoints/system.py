@@ -10,7 +10,8 @@ from database.session import get_db
 from crud import system as crud
 from schemas.system import (
     SystemSettingCreate, SystemSettingUpdate, SystemSettingResponse,
-    QuickCategoryCreate, QuickCategoryUpdate, QuickCategoryResponse,
+    QuickCategoryCreate, QuickCategoryUpdate, QuickCategoryResponse, QuickCategoryItemResponse, QuickCategoryItemCreate,
+    QuickCategoryItemUpdate,
 )
 
 router = APIRouter(prefix="/system", tags=["System"])
@@ -105,3 +106,44 @@ def reorder_quick_categories(payload: ReorderIn, db: Session = Depends(get_db)):
 def normalize_quick_category_order(db: Session = Depends(get_db)):
     n = crud.normalize_quick_category_order(db)
     return {"normalized": n}
+
+
+# 생성
+@router.post("/system/quick-categories/{qc_id}/items", response_model=QuickCategoryItemResponse)
+def create_item(qc_id: int, payload: QuickCategoryItemCreate, db: Session = Depends(get_db)):
+    return crud.create_quick_category_item(db, qc_id, payload.model_dump())
+
+# 단건 조회
+@router.get("/system/quick-category-items/{item_id}", response_model=QuickCategoryItemResponse)
+def get_item(item_id: int, db: Session = Depends(get_db)):
+    obj = crud.get_quick_category_item(db, item_id)
+    if not obj: raise HTTPException(404)
+    return obj
+
+
+# 세부 카테고리(아이템) 목록
+@router.get("/system/quick-categories/{qc_id}/items", response_model=list[QuickCategoryItemResponse])
+def list_items(qc_id: int, db: Session = Depends(get_db)):
+    return crud.list_quick_category_items(db, qc_id)
+
+# 수정
+@router.patch("/system/quick-category-items/{item_id}", response_model=QuickCategoryItemResponse)
+def update_item(item_id: int, payload: QuickCategoryItemUpdate, db: Session = Depends(get_db)):
+    obj = crud.update_quick_category_item(db, item_id, payload.model_dump(exclude_unset=True))
+    if not obj: raise HTTPException(404)
+    return obj
+
+# 삭제
+@router.delete("/system/quick-category-items/{item_id}", response_model=bool)
+def delete_item(item_id: int, db: Session = Depends(get_db)):
+    ok = crud.delete_quick_category_item(db, item_id)
+    if not ok: raise HTTPException(404)
+    return True
+
+
+
+
+
+
+
+
