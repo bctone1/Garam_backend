@@ -38,3 +38,4 @@ speechRecognition
 pyaudio
 openai-whisper
 langchain_huggingface
+pydantic

@@ -78,3 +78,31 @@ class QuickCategoryResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ----- QuickCategory_Item 서브메뉴 -----
+
+class QuickCategoryItemBase(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class QuickCategoryItemCreate(QuickCategoryItemBase):
+    quick_category_id: int
+    name = str
+    description: Optional[str] = None
+
+class QuickCategoryItemUpdate(QuickCategoryItemBase):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class QuickCategoryItemResponse(BaseModel):
+    id: int
+    quick_category_id: int
+    name: str
+    description: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+
+
