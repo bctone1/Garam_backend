@@ -203,7 +203,7 @@ def get_quick_category_item(db: Session, item_id: int) -> QuickCategoryItem | No
     return db.get(QuickCategoryItem, item_id)
 
 # 카테고리 목록 GET /system/quick-categories/{qc_id}/items
-def list_quick_category_items(db: Session, qc_id: int, offset: int = 0, limit: int = 200) -> list[QuickCategoryItem]:
+def list_quick_category_items(db: Session, qc_id: int, offset: int = 0, limit: int = 100) -> list[QuickCategoryItem]:
     stmt = (
         select(QuickCategoryItem)
         .where(QuickCategoryItem.quick_category_id == qc_id)

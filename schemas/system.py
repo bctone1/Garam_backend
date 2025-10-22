@@ -1,7 +1,7 @@
 # SCHEMAS/system.py
 from __future__ import annotations
 from typing import Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field,ConfigDict
 from datetime import datetime
 
 # ----- SystemSetting -----
@@ -86,12 +86,12 @@ class QuickCategoryItemBase(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
 
-class QuickCategoryItemCreate(QuickCategoryItemBase):
+class QuickCategoryItemCreate(BaseModel):
     quick_category_id: int
-    name = str
+    name: str
     description: Optional[str] = None
 
-class QuickCategoryItemUpdate(QuickCategoryItemBase):
+class QuickCategoryItemUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
 
