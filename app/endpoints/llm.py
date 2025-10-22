@@ -277,10 +277,11 @@ async def clova_stt_qa(
     db: Session = Depends(get_db),
 ):
     try:
-        b = await file.read()
+        b = await file.read()    # 업로드된 바이너리 데이터 타입 byte 줄인거
         wav = _ensure_wav_16k_mono(b, file.content_type or "")
         text = _clova_transcribe(wav, params.lang)
         flags = {}
+        # k : 키 이름 문자열 / v: value 값 / None이 아니면 [딕셔너리]에 넣음
         for k in ("block_inappropriate", "restrict_non_tech", "suggest_agent_handoff"):
             v = getattr(params, k, None)  # 없으면 None
             if v is not None:
