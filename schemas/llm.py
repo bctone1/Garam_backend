@@ -1,11 +1,12 @@
 from __future__ import annotations
 from typing import Optional, Literal
-from pydantic import BaseModel, Field, conint
+from pydantic import BaseModel, Field, conint,ConfigDict
 from fastapi import Form
 
 StyleLiteral = Literal['professional','friendly','concise']
 
 class QARequest(BaseModel):
+    model_config = ConfigDict(extra='ignore')
     question: str = Field(..., min_length=1, max_length=4000)
     session_id: Optional[int] = Field(default=None, ge=1)
     knowledge_id: Optional[int] = Field(default=None, ge=1)

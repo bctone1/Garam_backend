@@ -13,7 +13,6 @@ class ModelUpdate(BaseModel):
     response_style: Optional[ResponseStyle] = None
     block_inappropriate: Optional[bool] = None
     restrict_non_tech: Optional[bool] = None
-    fast_response_mode: Optional[bool] = None
     suggest_agent_handoff: Optional[bool] = None
 
     # 지표(원한다면 일반 업데이트에서도 허용)

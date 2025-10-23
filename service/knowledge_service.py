@@ -54,7 +54,7 @@ async def upload_knowledge_file(db: Session, file: UploadFile, user_id: str):
     # 5. PDF → Document → Chunk 나누기
     loader = PyMuPDFLoader(file_path)
     documents = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=250)
     split_docs = splitter.split_documents(documents)
 
     # 6. 각 청크 벡터화 후 knowledge_chunk에 저장

@@ -70,7 +70,7 @@ class UploadPipeline:
 
     def chunk_text(self, text: str) -> list[str]:
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000, chunk_overlap=100, length_function=len
+            chunk_size=1500, chunk_overlap=250, length_function=len
         )
         return splitter.split_text(text)
 
