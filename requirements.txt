@@ -39,3 +39,7 @@ pyaudio
 openai-whisper
 langchain_huggingface
 pydantic
+# 자료실 k.base 전환
+bs4
+pandas
+reportlab
