@@ -63,7 +63,7 @@ DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "gpt-4o-mini")
 CHROMA_PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", "./chroma_db")
 
 # 8) 모델 카탈로그
-OPENAI_MODELS = os.getenv("OPENAI_MODELS", "gpt-4,gpt-4o,gpt-4-turbo,gpt-3.5-turbo")
+OPENAI_MODELS = os.getenv("OPENAI_MODELS", "gpt-4,gpt-4o,gpt-4-turbo")
 CLAUDE_MODELS = os.getenv("CLAUDE_MODELS", "")
 ANTHROPIC_MODELS = os.getenv("ANTHROPIC_MODELS", "")
 GOOGLE_MODELS = os.getenv("GOOGLE_MODELS", "")
