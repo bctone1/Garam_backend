@@ -23,7 +23,7 @@ def parse_page(html: str):
         if not tr:
             continue
         tds = [td.get_text(strip=True) for td in tr.find_all("td")]
-        # 흔한 테이블 구성: [번호, 제목, 작성자, 작성일, 조회수, 추천수]
+
         # 안전하게 번호와 작성자만 탐색
         num = None
         author = ""
@@ -45,7 +45,7 @@ def parse_page(html: str):
         href = urljoin(BASE, a.get("href"))
 
         if num is not None:
-            rows.append({"번호": num, "제목": title, "작성자": author, "URL": href})
+            rows.append({"번호": num, "제목": title, "URL": href})
     return rows
 
 def crawl(max_pages=20, delay=0.6):
@@ -74,8 +74,8 @@ def crawl(max_pages=20, delay=0.6):
 def main():
     data = crawl(max_pages=50)
     out = sorted(data.values(), key=lambda x: x["번호"])
-    with open("../temp/garam_rwdboard.csv", "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=["번호","제목","작성자","URL"])
+    with open("../file/service_file/garam_bsb_url.csv", "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=["번호","제목","URL"])
         w.writeheader()
         w.writerows(out)
     # 콘솔 미리보기
