@@ -4,6 +4,7 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+# URL 입력 필요
 BASE = "http://m.garampos.co.kr"
 LIST_TMPL = "http://m.garampos.co.kr/bbs_shop/list.htm?board_code=rwdboard&page={page}"
 
