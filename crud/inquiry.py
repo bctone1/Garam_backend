@@ -97,8 +97,19 @@ def create(db: Session, data: dict) -> Inquiry:
     if data.get("status") == "completed" and not data.get("completed_at"):
         data["completed_at"] = datetime.now(timezone.utc)
 
+
     obj = Inquiry(**data)
     db.add(obj)
+    db.flush()    # obj.id
+
+# 안내 문구 추가
+    db.add(InquiryHistory(
+        inquiry_id=obj.id,
+        action="note",
+        admin_name="시스템",
+        details="챗봇을 통해 문의가 접수되었습니다."
+    ))
+
     db.commit()
     db.refresh(obj)
     return obj
