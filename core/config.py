@@ -24,6 +24,8 @@ FRIENDLI_API = os.getenv("FRIENDLI_API")
 EMBEDDING_API = os.getenv("EMBEDDING_API")
 SEARCH_API = os.getenv("SEARCH_API")
 
+UPSTAGE_API = os.getenv("UPSTAGE_API")
+
 CLOVA_STT_ID= os.getenv("CLOVA_STT_ID")
 CLOVA_STT_SECRET= os.getenv("CLOVA_STT_SECRET")
 CLOVA_STT_URL = "https://clovasr.naverncp.com/recog/v1/stt"

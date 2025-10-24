@@ -16,6 +16,9 @@ def text_to_vector(text):
         return None
 
 
+
+
+# exaone 임베딩
 class ExaoneEmbeddings(Embeddings):
     def __init__(self, api_url: str, api_key: str = None):
         self.api_url = api_url

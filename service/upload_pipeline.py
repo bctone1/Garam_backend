@@ -14,7 +14,6 @@ from models.knowledge import Knowledge
 import crud.knowledge as crud
 import core.config as config
 
-
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -180,31 +179,28 @@ class UploadPipeline:
     # 파이프라인 실행
     def run(self, file: UploadFile) -> Knowledge:
         try:
-            path = self.save_file(file)
+            # 확장자/타입 검증 (PDF만 허용 시)
+            ext = os.path.splitext(file.filename or "")[1].lower()
+            allowed = (config.DOCUMENT_EXTENSION or "").split(",")
+            if allowed and ext not in allowed:
+                raise ValueError(f"unsupported file type: {ext}")
 
-            # 한 번만 로드하여 텍스트와 페이지 수 확보(+OCR 폴백)
+            path = self.save_file(file)
             text, num_pages = self.extract_text_with_ocr_fallback(path)
 
-            # 프리뷰 먼저 만들고 메타 생성
             preview = self._build_preview(text)
             know = self.create_metadata(file, preview)
 
-            # 페이지 정보 저장
             self.store_pages(know.id, num_pages=num_pages)
 
-            # 청크 → 임베딩
             chunks = self.chunk_text(text)
             chunks, vectors = self.embed_chunks(chunks)
-
             if vectors:
                 self.store_chunks(know.id, chunks, vectors)
 
-            # 완료
             self._set_status(know.id, "active")
             return know
-
-        except Exception as e:
-            # 실패 시 상태 업데이트
+        except Exception:
             if self.knowledge:
                 self._set_status(self.knowledge.id, "error")
             raise
