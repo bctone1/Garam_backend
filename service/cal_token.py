@@ -29,5 +29,3 @@ tot_cost = (tot_tokens / 1000.0) * PRICE_PER_1K
 print({"total_tokens": tot_tokens, "total_cost_usd": round(tot_cost, 6)})
 for kid, ntok in per_kid_tokens.items():
     print({"knowledge_id": kid, "tokens": ntok, "cost_usd": round((ntok/1000.0)*PRICE_PER_1K, 6)})
-
-#
