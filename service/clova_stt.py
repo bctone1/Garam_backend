@@ -1,5 +1,4 @@
 ## test 용도의 파일  ##
-
 import os
 import io
 import requests
@@ -7,9 +6,7 @@ import pyaudio
 import wave
 from dotenv import load_dotenv
 
-# ─────────────────────────────
 # ① 환경 변수 로드
-# ─────────────────────────────
 load_dotenv()
 CLIENT_ID = os.getenv("CLOVA_STT_ID")
 CLIENT_SECRET = os.getenv("CLOVA_STT_SECRET")
@@ -17,15 +14,11 @@ CLIENT_SECRET = os.getenv("CLOVA_STT_SECRET")
 if not CLIENT_ID or not CLIENT_SECRET:
     raise ValueError("❌ CLOVA_STT_ID 또는 CLOVA_STT_SECRET이 설정되지 않았습니다.")
 
-# ─────────────────────────────
 # ② CSR API 설정
-# ─────────────────────────────
 LANG = "Kor"
 CSR_URL = f"https://naveropenapi.apigw.ntruss.com/recog/v1/stt?lang={LANG}"
 
-# ─────────────────────────────
 # ③ 마이크 설정
-# ─────────────────────────────
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000
