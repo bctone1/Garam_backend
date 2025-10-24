@@ -16,7 +16,7 @@ from service.stt import transcribe_bytes
 from schemas.llm import STTResponse, STTQAParams
 import os, tempfile, subprocess, shutil, requests
 
-# router = APIRouter(tags=["LLM"])
+
 router = APIRouter(prefix="/llm", tags=["LLM"])
 
 
