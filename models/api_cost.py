@@ -12,7 +12,7 @@ class ApiCostDaily(Base):
 
     # PK: KST 기준 일자 × 제품 × 모델
     d = Column(Date, nullable=False, comment="KST 기준 날짜")
-    product = Column(Text, nullable=False, comment="llm | embedding | stt | tts | image")
+    product = Column(Text, nullable=False, comment="llm | embedding | stt ")
     model = Column(Text, nullable=False, comment="예: gpt-4o-mini, text-embedding-3-small")
 
     # 사용량

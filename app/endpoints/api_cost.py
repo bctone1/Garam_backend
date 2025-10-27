@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api-cost", tags=["Analytics"])
 # ===== 요청/응답 스키마(엔드포인트 전용) =====
 class AddEventRequest(BaseModel):
     ts_utc: datetime = Field(..., description="UTC 기준 호출 시각")
-    product: str = Field(..., pattern="^(llm|embedding|stt|tts|image)$")
+    product: str = Field(..., pattern="^(llm|embedding|stt)$")
     model: str
     llm_tokens: conint(ge=0) = 0
     embedding_tokens: conint(ge=0) = 0
@@ -29,7 +29,7 @@ class AddEventRequest(BaseModel):
 
 class EnsurePresentRequest(BaseModel):
     d: date
-    product: str = Field(..., pattern="^(llm|embedding|stt|tts|image)$")
+    product: str = Field(..., pattern="^(llm|embedding|stt)$")
     model: str
 
 

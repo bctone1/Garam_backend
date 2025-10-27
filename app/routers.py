@@ -1,5 +1,5 @@
 from fastapi import APIRouter, FastAPI
-from app.endpoints import admin_user, chat, inquiry, knowledge, faq, model, system, analytics, llm
+from app.endpoints import admin_user, chat, inquiry, knowledge, faq, model, system, analytics, llm,api_cost
 
 router = APIRouter()
 
@@ -12,6 +12,7 @@ router.include_router(model.router)
 router.include_router(system.router)
 router.include_router(analytics.router)
 router.include_router(llm.router)
+router.include_router(api_cost.router)
 
 def register_routers(app: FastAPI) -> None:
     app.include_router(router)
