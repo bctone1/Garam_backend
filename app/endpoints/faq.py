@@ -17,20 +17,35 @@ router = APIRouter(prefix="/faqs", tags=["FAQ"])
 def create_faq(payload: FAQCreate, db: Session = Depends(get_db)):
     return crud.create(db, payload.dict(exclude_unset=True))
 
+
 @router.get("/", response_model=list[FAQResponse])
 def list_faqs(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     q: Optional[str] = Query(None, description="search in question/answer"),
     order_by: OrderBy = Query("recent", pattern="^(recent|views|satisfaction)$"),
+    quick_category_id: Optional[int] = Query(None, description="filter by quick_category_id"),
+    include_category: bool = Query(False, description="load relationship (응답스키마는 동일)"),
     db: Session = Depends(get_db),
 ):
-    return crud.list_faqs(db, offset=offset, limit=limit, q=q, order_by=order_by)  # type: ignore[arg-type]
+    return crud.list_faqs(
+        db,
+        offset=offset,
+        limit=limit,
+        q=q,
+        order_by=order_by,
+        quick_category_id=quick_category_id,
+        include_category=include_category,
+    )  # type: ignore[arg-type]
 
 
 @router.get("/{faq_id}", response_model=FAQResponse)
-def get_faq(faq_id: int, db: Session = Depends(get_db)):
-    obj = crud.get(db, faq_id)
+def get_faq(
+    faq_id: int,
+    include_category: bool = Query(False, description="load relationship (응답스키마는 동일)"),
+    db: Session = Depends(get_db),
+):
+    obj = crud.get(db, faq_id, include_category=include_category)
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
     return obj

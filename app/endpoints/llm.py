@@ -19,7 +19,6 @@ import os, tempfile, subprocess, shutil, requests
 
 router = APIRouter(prefix="/llm", tags=["LLM"])
 
-
 CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
 
 def _ensure_session(db: Session, session_id: int) -> None:

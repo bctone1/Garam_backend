@@ -3,31 +3,41 @@
 from __future__ import annotations
 from typing import Optional, List, Literal, Dict, Any
 from sqlalchemy import select, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from models.faq import FAQ
 
 OrderBy = Literal["recent", "views", "satisfaction"]
 
 
-# 단건 조회
-def get(db: Session, faq_id: int) -> Optional[FAQ]:
-    return db.get(FAQ, faq_id)
+def get(db: Session, faq_id: int, *, include_category: bool = False) -> Optional[FAQ]:
+    stmt = select(FAQ).where(FAQ.id == faq_id)
+    if include_category:
+        stmt = stmt.options(selectinload(FAQ.quick_category))
+    return db.execute(stmt).scalars().first()
 
 
-# 목록 조회 + 검색/정렬
 def list_faqs(
     db: Session,
     *,
     offset: int = 0,
     limit: int = 50,
-    q: Optional[str] = None,                  # question/answer 부분 검색
+    q: Optional[str] = None,
     order_by: OrderBy = "recent",
+    quick_category_id: Optional[int] = None,
+    include_category: bool = False,
 ) -> List[FAQ]:
     stmt = select(FAQ)
 
     if q:
-        like = f"%{q}%"
-        stmt = stmt.where((FAQ.question.ilike(like)) | (FAQ.answer.ilike(like)))
+        q = q.strip()
+        if q:
+            like = f"%{q.lower()}%"
+            stmt = stmt.where(
+                func.lower(FAQ.question).like(like) | func.lower(FAQ.answer).like(like)
+            )
+
+    if quick_category_id is not None:
+        stmt = stmt.where(FAQ.quick_category_id == quick_category_id)
 
     if order_by == "views":
         stmt = stmt.order_by(FAQ.views.desc(), FAQ.created_at.desc())
@@ -36,11 +46,13 @@ def list_faqs(
     else:
         stmt = stmt.order_by(FAQ.created_at.desc())
 
+    if include_category:
+        stmt = stmt.options(selectinload(FAQ.quick_category))
+
     stmt = stmt.offset(offset).limit(min(limit, 100))
     return db.execute(stmt).scalars().all()
 
 
-# 생성
 def create(db: Session, data: Dict[str, Any]) -> FAQ:
     obj = FAQ(**data)
     db.add(obj)
@@ -49,9 +61,8 @@ def create(db: Session, data: Dict[str, Any]) -> FAQ:
     return obj
 
 
-# 수정
 def update(db: Session, faq_id: int, data: Dict[str, Any]) -> Optional[FAQ]:
-    obj = get(db, faq_id)
+    obj = db.get(FAQ, faq_id)
     if not obj:
         return None
     for k, v in data.items():
@@ -62,9 +73,8 @@ def update(db: Session, faq_id: int, data: Dict[str, Any]) -> Optional[FAQ]:
     return obj
 
 
-# 삭제
 def delete(db: Session, faq_id: int) -> bool:
-    obj = get(db, faq_id)
+    obj = db.get(FAQ, faq_id)
     if not obj:
         return False
     db.delete(obj)
@@ -72,11 +82,10 @@ def delete(db: Session, faq_id: int) -> bool:
     return True
 
 
-# 조회수 증가
 def increment_views(db: Session, faq_id: int, delta: int = 1) -> Optional[FAQ]:
     if delta <= 0:
         delta = 1
-    obj = get(db, faq_id)
+    obj = db.get(FAQ, faq_id)
     if not obj:
         return None
     obj.views = int(obj.views or 0) + delta
@@ -86,13 +95,9 @@ def increment_views(db: Session, faq_id: int, delta: int = 1) -> Optional[FAQ]:
     return obj
 
 
-# 만족도 설정 (0~100)
 def set_satisfaction_rate(db: Session, faq_id: int, rate: float) -> Optional[FAQ]:
-    if rate < 0:
-        rate = 0
-    if rate > 100:
-        rate = 100
-    obj = get(db, faq_id)
+    rate = 0 if rate < 0 else 100 if rate > 100 else rate
+    obj = db.get(FAQ, faq_id)
     if not obj:
         return None
     obj.satisfaction_rate = rate
