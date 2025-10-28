@@ -72,7 +72,7 @@ class InquiryHistory(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "action IN ('assign','on_hold','resume','transfer','complete','note','contact','delete')",
+            "action IN ('new','assign','on_hold','resume','transfer','complete','note','contact','delete')",
             name="chk_inqh_action"
         ),
         # CheckConstraint("action <> 'transfer' OR to_admin_id IS NOT NULL", name="chk_inqh_transfer_consistency"),
