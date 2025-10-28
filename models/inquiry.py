@@ -65,10 +65,10 @@ class InquiryHistory(Base):
 
 
     __table_args__ = (
-        # CheckConstraint(
-        #     "action IN ('new','assign','on_hold','resume','transfer','complete','note','contact','delete')",
-        #     name="chk_inqh_action"
-        # ),
+        CheckConstraint(
+            "action IN ('new','assign','on_hold','resume','transfer','complete','note','contact','delete')",
+            name="chk_inqh_action"
+        ),
 
         Index("idx_inqh_inquiry_time", "inquiry_id", "created_at"),
         Index("idx_inqh_action_time", "action", "created_at"),
