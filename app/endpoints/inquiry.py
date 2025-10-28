@@ -33,6 +33,7 @@ def get_inquiry_list(db: Session = Depends(get_db)):
             joinedload(Inquiry.assignee),
             joinedload(Inquiry.histories),
         )
+        .order_by(Inquiry.id.desc())
         .all()
     )
     return [serialize_inquiry(i) for i in inquiries]
@@ -43,16 +44,17 @@ def get_inquiry_list(db: Session = Depends(get_db)):
 def create_inquiry(payload: InquiryCreate, db: Session = Depends(get_db)):
     return crud.create(db, payload.model_dump(exclude_unset=True))
 
+
 @router.get("/", response_model=list[InquiryResponse])
 def list_inquiries(
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-    status: Optional[Status] = Query(None),
-    assignee_admin_id: Optional[int] = Query(None),
-    q: Optional[str] = Query(None, description="search in name/company/phone/content"),
-    created_from: Optional[datetime] = Query(None),
-    created_to: Optional[datetime] = Query(None),
-    db: Session = Depends(get_db),
+        offset: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=100),
+        status: Optional[Status] = Query(None),
+        assignee_admin_id: Optional[int] = Query(None),
+        q: Optional[str] = Query(None, description="search in name/company/phone/content"),
+        created_from: Optional[datetime] = Query(None),
+        created_to: Optional[datetime] = Query(None),
+        db: Session = Depends(get_db),
 ):
     return crud.list_inquiries(
         db,
@@ -65,6 +67,7 @@ def list_inquiries(
         created_to=created_to,
     )
 
+
 @router.get("/{inquiry_id}", response_model=InquiryResponse)
 def get_inquiry(inquiry_id: int, db: Session = Depends(get_db)):
     obj = crud.get(db, inquiry_id)
@@ -72,12 +75,14 @@ def get_inquiry(inquiry_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="not found")
     return obj
 
+
 @router.patch("/{inquiry_id}", response_model=InquiryResponse)
 def update_inquiry(inquiry_id: int, payload: InquiryUpdate, db: Session = Depends(get_db)):
     obj = crud.update(db, inquiry_id, payload.model_dump(exclude_unset=True))
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
     return obj
+
 
 @router.delete("/{inquiry_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_inquiry(inquiry_id: int, db: Session = Depends(get_db)):
@@ -91,6 +96,7 @@ class AssignIn(BaseModel):
     admin_id: int
     actor_admin_id: Optional[int] = None  # 기록은 admin_name으로 변환됨
 
+
 @router.post("/{inquiry_id}/assign", response_model=InquiryResponse)
 def assign(inquiry_id: int, payload: AssignIn, db: Session = Depends(get_db)):
     obj = crud.assign(db, inquiry_id, payload.admin_id, actor_admin_id=payload.actor_admin_id)
@@ -98,8 +104,10 @@ def assign(inquiry_id: int, payload: AssignIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="not found")
     return obj
 
+
 class UnassignIn(BaseModel):
     actor_admin_id: Optional[int] = None
+
 
 @router.post("/{inquiry_id}/unassign", response_model=InquiryResponse)
 def unassign(inquiry_id: int, payload: UnassignIn | None = None, db: Session = Depends(get_db)):
@@ -108,9 +116,11 @@ def unassign(inquiry_id: int, payload: UnassignIn | None = None, db: Session = D
         raise HTTPException(status_code=404, detail="not found")
     return obj
 
+
 class TransferIn(BaseModel):
     to_admin_id: int
     actor_admin_id: Optional[int] = None
+
 
 @router.post("/{inquiry_id}/transfer", response_model=InquiryResponse)
 def transfer(inquiry_id: int, payload: TransferIn, db: Session = Depends(get_db)):
@@ -119,10 +129,12 @@ def transfer(inquiry_id: int, payload: TransferIn, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="not found")
     return obj
 
+
 class SetStatusIn(BaseModel):
     status: Status
     actor_admin_id: Optional[int] = None
     details: Optional[str] = None  # InquiryHistory.details에 기록
+
 
 @router.post("/{inquiry_id}/status", response_model=InquiryResponse)
 def set_status(inquiry_id: int, payload: SetStatusIn, db: Session = Depends(get_db)):
@@ -137,8 +149,10 @@ def set_status(inquiry_id: int, payload: SetStatusIn, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="not found")
     return obj
 
+
 class SatisfactionIn(BaseModel):
     satisfaction: Satisfaction
+
 
 @router.post("/{inquiry_id}/satisfaction", response_model=InquiryResponse)
 def set_satisfaction(inquiry_id: int, payload: SatisfactionIn, db: Session = Depends(get_db)):
@@ -151,14 +165,15 @@ def set_satisfaction(inquiry_id: int, payload: SatisfactionIn, db: Session = Dep
 # -------- histories --------
 @router.get("/{inquiry_id}/histories", response_model=list[InquiryHistoryResponse])
 def list_histories(
-    inquiry_id: int,
-    offset: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
+        inquiry_id: int,
+        offset: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=500),
+        db: Session = Depends(get_db),
 ):
     if not crud.get(db, inquiry_id):
         raise HTTPException(status_code=404, detail="inquiry not found")
     return crud.list_histories(db, inquiry_id, offset=offset, limit=limit)
+
 
 class HistoryNoteIn(BaseModel):
     admin_id: Optional[int] = None  # 기록은 admin_name으로 변환됨
@@ -166,7 +181,7 @@ class HistoryNoteIn(BaseModel):
     action: Optional[str] = None
 
 @router.post("/{inquiry_id}/histories/note", response_model=InquiryHistoryResponse)
-def add_history_note(inquiry_id: int, payload: HistoryNoteIn, db: Session = Depends(get_db)):
+def add_history_note(inquiry_id: int, action: str, payload: HistoryNoteIn, db: Session = Depends(get_db)):
     if not crud.get(db, inquiry_id):
         raise HTTPException(status_code=404, detail="inquiry not found")
     return crud.add_history_note(db, inquiry_id, action=payload.action, admin_id=payload.admin_id, details=payload.details)

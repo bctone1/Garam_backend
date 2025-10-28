@@ -28,7 +28,7 @@ class Inquiry(Base):
     customer_satisfaction = Column(String)
 
     assignee = relationship("AdminUser", backref="inquiries", foreign_keys=[assignee_admin_id])
-    histories = relationship("InquiryHistory", back_populates="inquiry", cascade="all, delete-orphan")
+    histories = relationship("InquiryHistory", back_populates="inquiry", cascade="all, delete-orphan",order_by="InquiryHistory.id.asc()" )
 
     __table_args__ = (
         CheckConstraint("status IN ('new','processing','on_hold','completed')", name="chk_inquiry_status"),
