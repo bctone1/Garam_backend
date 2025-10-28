@@ -1,20 +1,38 @@
+# services/knowledge_service.py
 import os
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
 from uuid import uuid4
+from datetime import datetime, timezone
+import logging
+
 from crud import knowledge as crud_knowledge
+from crud import api_cost as cost
 from service.prompt import pdf_preview_prompt
 
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_service.embedding.get_vector import text_to_vector
 
-import core.config as config
+from core import config
+from core.pricing import normalize_usage_embedding, estimate_embedding_cost_usd
+
+log = logging.getLogger("api_cost")
+
+# 토큰 길이 함수: tiktoken 있으면 사용, 없으면 문자 길이
+try:
+    import tiktoken
+    _enc = tiktoken.get_encoding("cl100k_base")
+    def _tok_len(s: str) -> int:
+        return len(_enc.encode(s or ""))
+except Exception:
+    def _tok_len(s: str) -> int:
+        return len(s or "")
 
 
 async def upload_knowledge_file(db: Session, file: UploadFile, user_id: str):
     """
-    파일 업로드 → PDF 요약 → 벡터화 → DB 저장 전체 파이프라인
+    파일 업로드 → PDF 요약 → 벡터화 → DB 저장 → 비용 집계
     """
     # 1. 사용자별 디렉토리 생성
     save_dir = config.UPLOAD_FOLDER
@@ -39,7 +57,7 @@ async def upload_knowledge_file(db: Session, file: UploadFile, user_id: str):
     tags = pdf_preview.get("tags", "")
     preview = pdf_preview.get("preview", [])
 
-    # 4. knowledge 테이블에 메타데이터 저장
+    # 4. knowledge 메타 저장
     knowledge = crud_knowledge.create_knowledge(
         db=db,
         origin_name=origin_name,
@@ -51,26 +69,49 @@ async def upload_knowledge_file(db: Session, file: UploadFile, user_id: str):
         preview=preview,
     )
 
-    # 5. PDF → Document → Chunk 나누기
+    # 5. PDF → Document → Chunk
     loader = PyMuPDFLoader(file_path)
     documents = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=250)
     split_docs = splitter.split_documents(documents)
 
-    # 6. 각 청크 벡터화 후 knowledge_chunk에 저장
+    # 6. 청크 임베딩 및 저장 + 토큰 합산
     chunk_payload = []
+    total_tokens = 0
     for idx, doc in enumerate(split_docs):
-        vector = text_to_vector(doc.page_content)
-        if vector is None:
+        text = doc.page_content or ""
+        total_tokens += _tok_len(text)
+        vec = text_to_vector(text)
+        if vec is None:
             continue
         chunk_payload.append({
             "index": idx,
-            "text": doc.page_content,
-            "vector": vector,
+            "text": text,
+            "vector": vec,
         })
 
     if chunk_payload:
         crud_knowledge.create_knowledge_chunks(db, knowledge.id, chunk_payload)
+
+        # 7. 비용 집계: 임베딩
+        try:
+            usage = normalize_usage_embedding(total_tokens)
+            usd = estimate_embedding_cost_usd(
+                model=getattr(config, "DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small"),
+                total_tokens=usage["embedding_tokens"],
+            )
+            cost.add_event(
+                db,
+                ts_utc=datetime.now(timezone.utc),
+                product="embedding",
+                model=getattr(config, "DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small"),
+                llm_tokens=0,
+                embedding_tokens=usage["embedding_tokens"],
+                audio_seconds=0,
+                cost_usd=usd,
+            )
+        except Exception as e:
+            log.exception("api-cost embedding record failed: %s", e)
 
     return knowledge
 
