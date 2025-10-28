@@ -1,30 +1,79 @@
-# CORE/pricing.py
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from math import ceil
-from typing import List, Optional
+from typing import List, Optional, Iterable
+
+import logging
 
 from core import config
 
+log = logging.getLogger("api_cost.pricing")
 
-# === 공통 ===
+# tiktoken 사용 시도, 없으면 폴백
+try:
+    import tiktoken  # type: ignore
+    _HAS_TIKTOKEN = True
+except Exception:
+    tiktoken = None  # type: ignore
+    _HAS_TIKTOKEN = False
+
+
+# === 공통 헬퍼 ===
 def _quantize_usd(x: Decimal) -> Decimal:
     q = Decimal(10) ** -int(getattr(config, "COST_PRECISION", 6))
     return x.quantize(q, rounding=ROUND_HALF_UP)
 
+
 def _require_price(product: str, model: str, key: str) -> Decimal:
     try:
         val = config.API_PRICING[product][model][key]
-    except KeyError as e:
+    except Exception as e:
         raise ValueError(f"pricing missing: {product}/{model}/{key}") from e
     return Decimal(str(val))
+
+
+# ===== tiktoken 토큰 계산 유틸 =====
+def _get_encoder_for_model(model: str):
+    if not _HAS_TIKTOKEN:
+        log.debug("tiktoken not installed. falling back to char-count for model=%s", model)
+        return None
+    try:
+        return tiktoken.encoding_for_model(model)
+    except Exception:
+        try:
+            return tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            log.debug("tiktoken failed to get encoder, falling back to char-count for model=%s", model)
+            return None
+
+
+def tokens_for_text(model: str, text: str) -> int:
+    """단일 문자열의 토큰 수 추정."""
+    if not text:
+        return 0
+    enc = _get_encoder_for_model(model)
+    if enc is None:
+        return len(text)
+    return len(enc.encode(text))
+
+
+def tokens_for_texts(model: str, texts: Iterable[str]) -> int:
+    """여러 텍스트 묶음의 총 토큰 수 추정."""
+    enc = _get_encoder_for_model(model)
+    if enc is None:
+        return sum(len(t or "") for t in texts)
+    total = 0
+    for t in texts:
+        total += len(enc.encode(t or ""))
+    return total
 
 
 # ===== 임베딩 =====
 def _embedding_price_per_1k_usd(model: str) -> Decimal:
     return _require_price("embedding", model, "per_1k_token_usd")
+
 
 def estimate_embedding_cost_usd(model: str, total_tokens: int) -> Decimal:
     tokens = max(0, int(total_tokens))
@@ -32,6 +81,7 @@ def estimate_embedding_cost_usd(model: str, total_tokens: int) -> Decimal:
     unit = Decimal(int(getattr(config, "TOKEN_UNIT", 1000)))
     usd = (Decimal(tokens) / unit) * per_1k
     return _quantize_usd(usd)
+
 
 def normalize_usage_embedding(total_tokens: int) -> dict:
     return {"llm_tokens": 0, "embedding_tokens": max(0, int(total_tokens)), "audio_seconds": 0}
@@ -41,6 +91,7 @@ def normalize_usage_embedding(total_tokens: int) -> dict:
 def _llm_price_per_1k_usd(model: str) -> Decimal:
     return _require_price("llm", model, "per_1k_token_usd")
 
+
 def estimate_llm_cost_usd(
     model: str,
     *,
@@ -48,6 +99,10 @@ def estimate_llm_cost_usd(
     completion_tokens: int = 0,
     total_tokens: Optional[int] = None,
 ) -> Decimal:
+    """
+    토큰 수로 LLM 비용 계산. total_tokens 우선 사용.
+    LLM_TOKEN_MODE이 'merged'면 prompt+completion 합산. 'separate'면 in/out 단가 활용 시 적용.
+    """
     unit = Decimal(int(getattr(config, "TOKEN_UNIT", 1000)))
     mode = getattr(config, "LLM_TOKEN_MODE", "merged")
 
@@ -55,10 +110,10 @@ def estimate_llm_cost_usd(
         if mode == "merged":
             total_tokens = int(prompt_tokens) + int(completion_tokens)
         else:
-            in_p  = config.API_PRICING["llm"][model].get("per_1k_token_usd_in")
+            in_p = config.API_PRICING["llm"][model].get("per_1k_token_usd_in")
             out_p = config.API_PRICING["llm"][model].get("per_1k_token_usd_out")
             if in_p is not None and out_p is not None:
-                usd = (Decimal(max(0, int(prompt_tokens)))   / unit) * Decimal(str(in_p))
+                usd = (Decimal(max(0, int(prompt_tokens))) / unit) * Decimal(str(in_p))
                 usd += (Decimal(max(0, int(completion_tokens))) / unit) * Decimal(str(out_p))
                 return _quantize_usd(usd)
             total_tokens = int(prompt_tokens) + int(completion_tokens)
@@ -67,6 +122,7 @@ def estimate_llm_cost_usd(
     per_1k = _llm_price_per_1k_usd(model)
     usd = (Decimal(tokens) / unit) * per_1k
     return _quantize_usd(usd)
+
 
 def normalize_usage_llm(
     *,
@@ -80,7 +136,6 @@ def normalize_usage_llm(
 
 
 # ===== CLOVA STT 사용량 이벤트/요약 =====
-# 클로바가 직접제공하는 api 함수가 없어서 내부 계산값 간단히 정의 위해 @ 객체 정의 사용
 @dataclass
 class ClovaSttUsageEvent:
     mode: str                               # "short_sync" | "live_grpc" 등
@@ -88,6 +143,7 @@ class ClovaSttUsageEvent:
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
     meta: Optional[dict] = None
+
 
 @dataclass
 class ClovaSttUsageSummary:
@@ -105,17 +161,20 @@ def _effective_seconds(e: ClovaSttUsageEvent) -> float:
         return max(0.0, (e.ended_at - e.started_at).total_seconds())
     return 0.0
 
+
 def _billable_seconds(seconds: float) -> int:
     unit = int(getattr(config, "CLOVA_STT_BILLING_UNIT_SECONDS", 15))
     if seconds <= 0:
         return 0
     return int(ceil(seconds / unit) * unit)
 
+
 def _price_krw_for_bill_seconds(bill_secs: int) -> int:
     unit = int(getattr(config, "CLOVA_STT_BILLING_UNIT_SECONDS", 15))
     per_unit_krw = int(getattr(config, "CLOVA_STT_PRICE_PER_UNIT_KRW", 0))
     units = bill_secs // unit
     return int(units * per_unit_krw)
+
 
 def _krw_to_usd(krw: int) -> Optional[Decimal]:
     fx = getattr(config, "FX_KRW_PER_USD", None)
@@ -146,6 +205,7 @@ def estimate_clova_stt(events: List[ClovaSttUsageEvent]) -> ClovaSttUsageSummary
         price_krw=int(total_price),
         price_usd=usd,
     )
+
 
 def normalize_usage_stt(raw_seconds: float) -> dict:
     bsecs = _billable_seconds(raw_seconds)
