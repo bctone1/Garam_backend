@@ -4,3 +4,6 @@
 myenv/
 
 /temp
+
+pycache/
+*pyc
