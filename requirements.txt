@@ -43,3 +43,7 @@ pydantic
 bs4
 pandas
 reportlab
+python-multipart>=0.0.9
+tiktoken>=0.7.0
+uvicorn>=0.30.0
+

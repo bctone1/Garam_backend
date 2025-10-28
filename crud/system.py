@@ -77,7 +77,7 @@ def upsert_quick_categories(db: Session, payload_list: list[QuickCategoryCreate]
     results = []
 
     for item in payload_list:
-        data = item.dict()
+        data = item.model_dump()
 
         # ID가 있으면 기존 항목 업데이트
         if data.get("id"):

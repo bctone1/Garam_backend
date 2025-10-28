@@ -14,7 +14,11 @@ from models.knowledge import Knowledge
 import crud.knowledge as crud
 import crud.api_cost as cost
 import core.config as config
-from core.pricing import normalize_usage_embedding, estimate_embedding_cost_usd
+from core.pricing import (
+    tokens_for_texts,               # tiktoken 기반 토큰 계산
+    normalize_usage_embedding,
+    estimate_embedding_cost_usd,
+)
 
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -34,16 +38,10 @@ _USE_LLM_PREVIEW = getattr(config, "USE_LLM_PREVIEW", False)
 if _USE_LLM_PREVIEW:
     from service.prompt import pdf_preview_prompt  # type: ignore
 
-# 토큰 길이 함수: tiktoken 있으면 사용, 없으면 문자 길이
-try:
-    import tiktoken
-    _enc = tiktoken.get_encoding("cl100k_base")
 
-    def _tok_len(s: str) -> int:
-        return len(_enc.encode(s))
-except Exception:
-    def _tok_len(s: str) -> int:
-        return len(s)
+def _tok_len(s: str) -> int:
+    model = getattr(config, "DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small")
+    return tokens_for_texts(model, [s])
 
 
 class UploadPipeline:
@@ -186,6 +184,7 @@ class UploadPipeline:
                         model=getattr(config, "DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small"),
                         total_tokens=usage["embedding_tokens"],
                     )
+                    log.info("api-cost: will record embedding tokens=%d usd=%s", usage["embedding_tokens"], usd)
                     cost.add_event(
                         self.db,
                         ts_utc=datetime.now(timezone.utc),
@@ -196,6 +195,7 @@ class UploadPipeline:
                         audio_seconds=0,
                         cost_usd=usd,
                     )
+                    log.info("api-cost: recorded embedding tokens=%d usd=%s", usage["embedding_tokens"], usd)
                 except Exception as e:
                     log.exception("api-cost embedding record failed: %s", e)
 
