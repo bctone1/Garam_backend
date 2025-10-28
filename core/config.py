@@ -61,7 +61,6 @@ VECTOR_DB_CONNECTION = os.getenv(
 
 # 7) 임베딩·채팅·Chroma
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "gpt-4o-mini")
 CHROMA_PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", "./chroma_db")
 
 # 8) 모델 카탈로그
@@ -70,7 +69,7 @@ CLAUDE_MODELS = os.getenv("CLAUDE_MODELS", "")
 ANTHROPIC_MODELS = os.getenv("ANTHROPIC_MODELS", "")
 GOOGLE_MODELS = os.getenv("GOOGLE_MODELS", "")
 FRIENDLI_MODELS = os.getenv("FRIENDLI_MODELS", "")
-
+DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "gpt-4o-mini")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 LLM_MODEL    = os.getenv("LLM_MODEL", DEFAULT_CHAT_MODEL)
 
@@ -89,3 +88,32 @@ TEAM_ID = os.getenv("TEAM_ID")
 FRIENDLI_TOKEN = os.getenv("FRIENDLI_TOKEN")
 FRIENDLI_BASE_URL = os.getenv("FRIENDLI_BASE_URL")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
+
+# 12) cost 설정
+API_PRICING = {
+    "embedding": {
+        "text-embedding-3-small": {"per_1k_token_usd": 0.02},
+        # "text-embedding-3-large": {"per_1k_token_usd": 0.13},
+    },
+    "llm": {
+        "gpt-4o-mini": {"per_1k_token_usd": 0.75},
+    },
+    "stt": {
+        "CLOVA_STT": {"per_second_usd": 0.0},  # 참고용
+    },
+}
+
+TIMEZONE = "Asia/Seoul"
+COST_PRECISION = 6
+TOKEN_UNIT = 1000
+LLM_TOKEN_MODE = "merged"
+
+DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+DEFAULT_LLM_MODEL = "gpt-4o-mini"
+DEFAULT_STT_MODEL = "CLOVA_STT"
+
+# CLOVA STT 과금 규칙
+CLOVA_STT_BILLING_UNIT_SECONDS = 15   # 15초 단위 과금
+CLOVA_STT_PRICE_PER_UNIT_KRW = 4      # 15초당 4원
+FX_KRW_PER_USD = 1400                 # 원→달러 환산. 미사용 시 None
+

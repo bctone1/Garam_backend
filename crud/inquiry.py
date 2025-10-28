@@ -100,9 +100,9 @@ def create(db: Session, data: dict) -> Inquiry:
 
     obj = Inquiry(**data)
     db.add(obj)
-    db.flush()  # obj.id
+    db.flush()    # obj.id
 
-    # 안내 문구 추가
+# 안내 문구 추가
     db.add(InquiryHistory(
         inquiry_id=obj.id,
         action="new",
@@ -245,12 +245,12 @@ def set_customer_satisfaction(db: Session, inquiry_id: int, satisfaction: Satisf
 
 # ====== InquiryHistory ======
 def _add_history(
-        db: Session,
-        inquiry_id: int,
-        *,
-        action: Action,
-        admin_name: Optional[str] = None,
-        details: Optional[str] = None,
+    db: Session,
+    inquiry_id: int,
+    *,
+    action: str,
+    admin_name: Optional[str] = None,
+    details: Optional[str] = None,
 ) -> InquiryHistory:
     hist = InquiryHistory(
         inquiry_id=inquiry_id,

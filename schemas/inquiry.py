@@ -45,7 +45,7 @@ class InquiryResponse(InquiryBase):
 # InquiryHistory
 # -------------------------------
 Action = Literal[
-    "assign", "on_hold", "resume", "transfer", "complete", "note", "contact", "delete"
+    "new","assign", "on_hold", "resume", "transfer", "complete", "note", "contact", "delete"
 ]
 
 class InquiryHistoryBase(BaseModel):

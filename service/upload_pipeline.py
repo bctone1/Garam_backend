@@ -4,16 +4,22 @@ import shutil
 from uuid import uuid4
 from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+import logging
 
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from models.knowledge import Knowledge
 import crud.knowledge as crud
+import crud.api_cost as cost
 import core.config as config
+from core.pricing import normalize_usage_embedding, estimate_embedding_cost_usd
 
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+log = logging.getLogger("api_cost")
 
 # 임베딩: 배치가 있으면 우선 사용, 없으면 단건 + 스레드풀
 try:
@@ -76,7 +82,7 @@ class UploadPipeline:
     # 3) 텍스트 추출
     def extract_text(self, file_path: str) -> Tuple[str, int]:
         docs = self._load_docs(file_path)
-        text = "\n".join(d.page_content for d in docs if getattr(d, "page_content", "")) .strip()
+        text = "\n".join(d.page_content for d in docs if getattr(d, "page_content", "")).strip()
         return text, len(docs)
 
     # 4) 프리뷰
@@ -171,6 +177,27 @@ class UploadPipeline:
             chunks, vectors = self.embed_chunks(chunks)
             if vectors:
                 self.store_chunks(know.id, chunks, vectors)
+
+                # ==== 비용 집계: 임베딩 ====
+                try:
+                    total_tokens = sum(_tok_len(c or "") for c in chunks)
+                    usage = normalize_usage_embedding(total_tokens)
+                    usd = estimate_embedding_cost_usd(
+                        model=getattr(config, "DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small"),
+                        total_tokens=usage["embedding_tokens"],
+                    )
+                    cost.add_event(
+                        self.db,
+                        ts_utc=datetime.now(timezone.utc),
+                        product="embedding",
+                        model=getattr(config, "DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small"),
+                        llm_tokens=0,
+                        embedding_tokens=usage["embedding_tokens"],
+                        audio_seconds=0,
+                        cost_usd=usd,
+                    )
+                except Exception as e:
+                    log.exception("api-cost embedding record failed: %s", e)
 
             self._set_status(know.id, "active")
             return know

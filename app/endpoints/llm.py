@@ -16,10 +16,26 @@ from service.stt import transcribe_bytes
 from schemas.llm import STTResponse, STTQAParams
 import os, tempfile, subprocess, shutil, requests
 
+# ==== 비용 집계 훅 ====
+from datetime import datetime, timezone
+from decimal import Decimal
+import io, wave, logging
+from core import config
+from core.pricing import (
+    normalize_usage_llm,
+    estimate_llm_cost_usd,
+    ClovaSttUsageEvent,
+    estimate_clova_stt,
+    normalize_usage_stt,
+)
+from crud import api_cost as crud_cost
+
+log = logging.getLogger("api_cost")
 
 router = APIRouter(prefix="/llm", tags=["LLM"])
 
 CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
+
 
 def _ensure_session(db: Session, session_id: int) -> None:
     if not crud_chat.get_session(db, session_id):
@@ -68,6 +84,35 @@ def _build_sources(db: Session, vector: list[float], knowledge_id: Optional[int]
     ]
 
 
+def _extract_total_tokens(obj) -> Optional[int]:
+    try:
+        meta = getattr(obj, "response_metadata", None)
+        if isinstance(meta, dict):
+            tu = meta.get("token_usage") or meta.get("usage") or {}
+            if isinstance(tu, dict):
+                tt = tu.get("total_tokens")
+                if tt is None:
+                    pt = tu.get("prompt_tokens") or 0
+                    ct = tu.get("completion_tokens") or 0
+                    tt = pt + ct if (pt or ct) else None
+                return int(tt) if tt is not None else None
+    except Exception:
+        pass
+    try:
+        if isinstance(obj, dict):
+            tu = obj.get("response_metadata", {}).get("token_usage") or obj.get("token_usage") or {}
+            if isinstance(tu, dict):
+                tt = tu.get("total_tokens")
+                if tt is None:
+                    pt = tu.get("prompt_tokens") or 0
+                    ct = tu.get("completion_tokens") or 0
+                    tt = pt + ct if (pt or ct) else None
+                return int(tt) if tt is not None else None
+    except Exception:
+        pass
+    return None
+
+
 def _run_qa(
     db: Session,
     *,
@@ -96,13 +141,32 @@ def _run_qa(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     try:
-        answer = chain.invoke({"question": question})
+        raw = chain.invoke({"question": question})
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="LLM 호출에 실패했습니다.") from exc
 
+    # 비용 집계: LLM
+    try:
+        tok = _extract_total_tokens(raw)
+        if tok and tok > 0:
+            usage = normalize_usage_llm(total_tokens=tok)
+            usd = estimate_llm_cost_usd(model=config.DEFAULT_LLM_MODEL, total_tokens=usage["llm_tokens"])
+            crud_cost.add_event(
+                db,
+                ts_utc=datetime.now(timezone.utc),
+                product="llm",
+                model=config.DEFAULT_LLM_MODEL,
+                llm_tokens=usage["llm_tokens"],
+                embedding_tokens=0,
+                audio_seconds=0,
+                cost_usd=usd,
+            )
+    except Exception as e:
+        log.exception("api-cost llm record failed: %s", e)
+
     sources = _build_sources(db, vector, knowledge_id, top_k)
     return QAResponse(
-        answer=str(answer),
+        answer=str(raw),
         question=question,
         session_id=session_id,
         sources=sources,
@@ -184,9 +248,9 @@ async def stt_qa(
     try:
         # STT로 text 얻기
         text = transcribe_bytes(await file.read(), file.content_type or "", params.lang)
-        flags={}
+        flags = {}
         for k in ("block_inappropriate", "restrict_non_tech", "suggest_agent_handoff"):
-            v = getattr(params, k, None)  # 없으면 None
+            v = getattr(params, k, None)
             if v is not None:
                 flags[k] = v
         return _run_qa(
@@ -205,6 +269,16 @@ async def stt_qa(
 
 
 ## Clova STT 활용 ##
+
+def _wav_duration_seconds(data: bytes) -> float:
+    try:
+        with wave.open(io.BytesIO(data), "rb") as w:
+            frames = w.getnframes()
+            rate = w.getframerate() or 16000
+            return max(0.0, frames / float(rate))
+    except Exception:
+        return 0.0
+
 def _ensure_wav_16k_mono(data: bytes, content_type: str) -> bytes:
     if content_type in ("audio/wav", "audio/x-wav"):
         return data
@@ -257,11 +331,31 @@ def _clova_transcribe(data: bytes, lang: str) -> str:
 
 
 @router.post("/clova_stt", response_model=STTResponse)
-async def clova_stt(file: UploadFile = File(...), lang: str = Form("ko-KR")):
+async def clova_stt(file: UploadFile = File(...), lang: str = Form("ko-KR"), db: Session = Depends(get_db)):
     try:
         b = await file.read()
         wav = _ensure_wav_16k_mono(b, file.content_type or "")
         text = _clova_transcribe(wav, lang)
+
+        # 비용 집계: STT
+        try:
+            secs = _wav_duration_seconds(wav)
+            summary = estimate_clova_stt([ClovaSttUsageEvent(mode="api", audio_seconds=secs)])
+            usage = normalize_usage_stt(summary.raw_seconds)
+            usd = summary.price_usd or Decimal("0")
+            crud_cost.add_event(
+                db,
+                ts_utc=datetime.now(timezone.utc),
+                product="stt",
+                model=config.DEFAULT_STT_MODEL,
+                llm_tokens=0,
+                embedding_tokens=0,
+                audio_seconds=usage["audio_seconds"],
+                cost_usd=usd,
+            )
+        except Exception as e:
+            log.exception("api-cost stt record failed: %s", e)
+
         return STTResponse(text=text)
     except ValueError:
         raise HTTPException(status_code=422, detail="empty transcription")
@@ -276,11 +370,30 @@ async def clova_stt_qa(
     db: Session = Depends(get_db),
 ):
     try:
-        b = await file.read()    # 업로드된 바이너리 데이터 타입 byte 줄인거
+        b = await file.read()    # 업로드된 바이너리
         wav = _ensure_wav_16k_mono(b, file.content_type or "")
         text = _clova_transcribe(wav, params.lang)
+
+        # 비용 집계: STT
+        try:
+            secs = _wav_duration_seconds(wav)
+            summary = estimate_clova_stt([ClovaSttUsageEvent(mode="api", audio_seconds=secs)])
+            usage = normalize_usage_stt(summary.raw_seconds)
+            usd = summary.price_usd or Decimal("0")
+            crud_cost.add_event(
+                db,
+                ts_utc=datetime.now(timezone.utc),
+                product="stt",
+                model=config.DEFAULT_STT_MODEL,
+                llm_tokens=0,
+                embedding_tokens=0,
+                audio_seconds=usage["audio_seconds"],
+                cost_usd=usd,
+            )
+        except Exception as e:
+            log.exception("api-cost stt record failed: %s", e)
+
         flags = {}
-        # k : 키 이름 문자열 / v: value 값 / None이 아니면 [딕셔너리]에 넣음
         for k in ("block_inappropriate", "restrict_non_tech", "suggest_agent_handoff"):
             v = getattr(params, k, None)  # 없으면 None
             if v is not None:
