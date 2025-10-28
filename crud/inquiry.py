@@ -247,7 +247,7 @@ def _add_history(
     db: Session,
     inquiry_id: int,
     *,
-    action: Action,
+    action: str,
     admin_name: Optional[str] = None,
     details: Optional[str] = None,
 ) -> InquiryHistory:
@@ -272,11 +272,11 @@ def list_histories(db: Session, inquiry_id: int, *, offset: int = 0, limit: int 
     return db.execute(stmt).scalars().all()
 
 
-def add_history_note(db: Session, inquiry_id: int, *, admin_id: Optional[int], details: Optional[str]) -> InquiryHistory:
+def add_history_note(db: Session, inquiry_id: int, action:str, *, admin_id: Optional[int], details: Optional[str]) -> InquiryHistory:
     hist = _add_history(
         db,
         inquiry_id,
-        action="note",
+        action= action,
         admin_name=_resolve_admin_name(db, admin_id),
         details=details,
     )
