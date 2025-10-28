@@ -92,16 +92,37 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 # 12) cost 설정
 API_PRICING = {
     "embedding": {
-        "text-embedding-3-small": {"per_1k_token_usd": 0.02},
+        "text-embedding-3-small": {"per_1k_token_usd": 0.00002},
         # "text-embedding-3-large": {"per_1k_token_usd": 0.13},
     },
     "llm": {
-        "gpt-4o-mini": {"per_1k_token_usd": 0.75},
+        "gpt-4o-mini": {"per_1k_token_usd": 0.0016},
     },
     "stt": {
-        "CLOVA_STT": {"per_second_usd": 0.0},  # 참고용
+        "CLOVA_STT": {"per_second_usd": 0.0002},  # 참고용
     },
 }
+
+# API_PRICING = {
+#     "embedding": {
+#         "text-embedding-3-small": {"per_1k_token_usd": 0.00002},  # $0.02 / 1M → $0.00002 / 1k
+#         # "text-embedding-3-large": {"per_1k_token_usd": 0.00013}, # $0.13 / 1M → $0.00013 / 1k
+#     },
+#     "llm": {
+#         "gpt-4o-mini": {
+#             "per_1k_token_usd_in": 0.0004,   # $0.4 / 1M
+#             "per_1k_token_usd_out": 0.0016,  # $1.6 / 1M
+#         },
+#     },
+#     "stt": {
+#         "CLOVA_STT": {"per_second_usd": 0.0002},
+#     },
+# }
+# LLM_TOKEN_MODE = "separate"
+# TOKEN_UNIT = 1000
+
+
+
 
 TIMEZONE = "Asia/Seoul"
 COST_PRECISION = 6

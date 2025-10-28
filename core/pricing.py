@@ -139,7 +139,7 @@ def normalize_usage_llm(
 @dataclass
 class ClovaSttUsageEvent:
     mode: str                               # "short_sync" | "live_grpc" 등
-    audio_seconds: float = 0.0
+    audio_seconds: float = 6.0
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
     meta: Optional[dict] = None

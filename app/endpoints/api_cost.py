@@ -40,13 +40,13 @@ class AddEventRequest(BaseModel):
 
 
 class EnsurePresentRequest(BaseModel):
-    d: date
+    date: date
     product: str = Field(..., pattern="^(llm|embedding|stt)$")
     model: str
 
 
 class TotalsItem(BaseModel):
-    d: Optional[date] = None
+    date: Optional[date] = None
     product: Optional[str] = None
     model: Optional[str] = None
     llm_tokens: int
@@ -90,7 +90,7 @@ def get_timeseries(
     rows = crud.list_range(db, start=start, end=end, product=product, model=model)
     agg: Dict[date, Dict[str, Decimal | int]] = {}
     for r in rows:
-        k = r.d
+        k = r.date
         if k not in agg:
             agg[k] = dict(llm_tokens=0, embedding_tokens=0, audio_seconds=0, cost_usd=Decimal("0"))
         agg[k]["llm_tokens"] += int(r.llm_tokens or 0)
@@ -102,7 +102,7 @@ def get_timeseries(
         v = agg[d_key]
         out.append(
             TotalsItem(
-                d=d_key,
+                date=d_key,
                 product=None,
                 model=None,
                 llm_tokens=int(v["llm_tokens"]),
