@@ -169,4 +169,4 @@ class HistoryNoteIn(BaseModel):
 def add_history_note(inquiry_id: int, payload: HistoryNoteIn, db: Session = Depends(get_db)):
     if not crud.get(db, inquiry_id):
         raise HTTPException(status_code=404, detail="inquiry not found")
-    return crud.add_history_note(db, inquiry_id, action="new", admin_id=payload.admin_id, details=payload.details)
+    return crud.add_history_note(db, inquiry_id, action=payload.action, admin_id=payload.admin_id, details=payload.details)
