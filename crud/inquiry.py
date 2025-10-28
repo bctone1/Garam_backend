@@ -34,6 +34,7 @@ def serialize_inquiry(inquiry: Inquiry):
         "completedDate": inquiry.completed_at.strftime("%Y-%m-%d %H:%M") if inquiry.completed_at else None,
         "history": [
             {
+                "id": h.id,
                 "action": h.action,
                 "admin": h.admin_name,
                 "timestamp": h.created_at.strftime("%Y-%m-%d %H:%M") if h.created_at else None,
@@ -50,15 +51,15 @@ def get(db: Session, inquiry_id: int) -> Optional[Inquiry]:
 
 
 def list_inquiries(
-    db: Session,
-    *,
-    offset: int = 0,
-    limit: int = 50,
-    status: Optional[Status] = None,
-    assignee_admin_id: Optional[int] = None,
-    q: Optional[str] = None,
-    created_from: Optional[datetime] = None,
-    created_to: Optional[datetime] = None,
+        db: Session,
+        *,
+        offset: int = 0,
+        limit: int = 50,
+        status: Optional[Status] = None,
+        assignee_admin_id: Optional[int] = None,
+        q: Optional[str] = None,
+        created_from: Optional[datetime] = None,
+        created_to: Optional[datetime] = None,
 ) -> List[Inquiry]:
     stmt = select(Inquiry)
     conds = []
@@ -97,12 +98,11 @@ def create(db: Session, data: dict) -> Inquiry:
     if data.get("status") == "completed" and not data.get("completed_at"):
         data["completed_at"] = datetime.now(timezone.utc)
 
-
     obj = Inquiry(**data)
     db.add(obj)
-    db.flush()    # obj.id
+    db.flush()  # obj.id
 
-# 안내 문구 추가
+    # 안내 문구 추가
     db.add(InquiryHistory(
         inquiry_id=obj.id,
         action="new",
@@ -185,7 +185,8 @@ def unassign(db: Session, inquiry_id: int, *, actor_admin_id: Optional[int] = No
     return obj
 
 
-def transfer(db: Session, inquiry_id: int, to_admin_id: int, *, actor_admin_id: Optional[int] = None) -> Optional[Inquiry]:
+def transfer(db: Session, inquiry_id: int, to_admin_id: int, *, actor_admin_id: Optional[int] = None) -> Optional[
+    Inquiry]:
     obj = get(db, inquiry_id)
     if not obj:
         return None
@@ -205,12 +206,12 @@ def transfer(db: Session, inquiry_id: int, to_admin_id: int, *, actor_admin_id: 
 
 
 def set_status(
-    db: Session,
-    inquiry_id: int,
-    status: Status,
-    *,
-    actor_admin_id: Optional[int] = None,
-    details: Optional[str] = None,
+        db: Session,
+        inquiry_id: int,
+        status: Status,
+        *,
+        actor_admin_id: Optional[int] = None,
+        details: Optional[str] = None,
 ) -> Optional[Inquiry]:
     obj = get(db, inquiry_id)
     if not obj:
@@ -244,12 +245,12 @@ def set_customer_satisfaction(db: Session, inquiry_id: int, satisfaction: Satisf
 
 # ====== InquiryHistory ======
 def _add_history(
-    db: Session,
-    inquiry_id: int,
-    *,
-    action: Action,
-    admin_name: Optional[str] = None,
-    details: Optional[str] = None,
+        db: Session,
+        inquiry_id: int,
+        *,
+        action: Action,
+        admin_name: Optional[str] = None,
+        details: Optional[str] = None,
 ) -> InquiryHistory:
     hist = InquiryHistory(
         inquiry_id=inquiry_id,
@@ -272,11 +273,12 @@ def list_histories(db: Session, inquiry_id: int, *, offset: int = 0, limit: int 
     return db.execute(stmt).scalars().all()
 
 
-def add_history_note(db: Session, inquiry_id: int, *, admin_id: Optional[int], details: Optional[str]) -> InquiryHistory:
+def add_history_note(db: Session, inquiry_id: int, action: str, *, admin_id: Optional[int],
+                     details: Optional[str]) -> InquiryHistory:
     hist = _add_history(
         db,
         inquiry_id,
-        action="note",
+        action=action,
         admin_name=_resolve_admin_name(db, admin_id),
         details=details,
     )
