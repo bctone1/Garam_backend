@@ -154,13 +154,13 @@ def assign(db: Session, inquiry_id: int, admin_id: int, *, actor_admin_id: Optio
     obj.assigned_at = datetime.now(timezone.utc)
     obj.status = "processing"
     db.add(obj)
-    _add_history(
-        db,
-        inquiry_id,
-        action="assign",
-        admin_name=_resolve_admin_name(db, actor_admin_id),
-        details=f"assignee_admin_id={admin_id}",
-    )
+    # _add_history(
+    #     db,
+    #     inquiry_id,
+    #     action="assign",
+    #     admin_name=_resolve_admin_name(db, actor_admin_id),
+    #     details=f"assignee_admin_id={admin_id}",
+    # )
     db.commit()
     db.refresh(obj)
     return obj
