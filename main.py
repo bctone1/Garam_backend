@@ -1,4 +1,4 @@
-# main.py (lifespan 버전)
+
 import os, logging, uvicorn
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv

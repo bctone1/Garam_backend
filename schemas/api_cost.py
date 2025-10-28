@@ -19,7 +19,7 @@ class ApiCostDailyBase(BaseModel):
     cost_usd: condecimal(max_digits=12, decimal_places=6) = Decimal("0")    ## 합계
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ApiCostDailyCreate(ApiCostDailyBase):
@@ -33,11 +33,11 @@ class ApiCostDailyUpdate(BaseModel):
     cost_usd: Optional[condecimal(max_digits=12, decimal_places=6)] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ApiCostDailyOut(ApiCostDailyBase):
     updated_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True

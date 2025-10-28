@@ -20,7 +20,7 @@ router = APIRouter(prefix="/system", tags=["System"])
 # ===== SystemSetting (단일 운영값) =====
 @router.post("/setting", response_model=SystemSettingResponse, status_code=status.HTTP_201_CREATED)
 def create_setting(payload: SystemSettingCreate, db: Session = Depends(get_db)):
-    return crud.create_setting(db, payload.dict())
+    return crud.create_setting(db, payload.model_dump())
 
 
 @router.get("/setting", response_model=SystemSettingResponse)
@@ -33,7 +33,7 @@ def get_current_setting(db: Session = Depends(get_db)):
 
 @router.patch("/setting", response_model=SystemSettingResponse)
 def update_current_setting(payload: SystemSettingUpdate, db: Session = Depends(get_db)):
-    obj = crud.update_current_setting(db, payload.dict(exclude_unset=True))
+    obj = crud.update_current_setting(db, payload.model_dump(exclude_unset=True))
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
     return obj
@@ -66,7 +66,7 @@ def upsert_quick_categories(payload: List[QuickCategoryCreate], db: Session = De
 
 @router.post("/quick-categories", response_model=QuickCategoryResponse, status_code=status.HTTP_201_CREATED)
 def create_quick_category(payload: QuickCategoryCreate, db: Session = Depends(get_db)):
-    return crud.create_quick_category(db, payload.dict())
+    return crud.create_quick_category(db, payload.model_dump())
 
 
 @router.get("/quick-categories/{qc_id}", response_model=QuickCategoryResponse)
@@ -79,7 +79,7 @@ def get_quick_category(qc_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/quick-categories/{qc_id}", response_model=QuickCategoryResponse)
 def update_quick_category(qc_id: int, payload: QuickCategoryUpdate, db: Session = Depends(get_db)):
-    obj = crud.update_quick_category(db, qc_id, payload.dict(exclude_unset=True))
+    obj = crud.update_quick_category(db, qc_id, payload.model_dump(exclude_unset=True))
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
     return obj
