@@ -115,8 +115,7 @@ def _run_qa(
 
     # 비용 집계: tiktoken 합산(질문+응답 텍스트)
     try:
-        model = getattr(config, "LLM_MODEL",
-                 getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
+        model = getattr(config, "DEFAULT_LLM_MODEL", "gpt-4o-mini")
         resp_text = str(raw)
         total_tokens = tokens_for_texts(model, [question, resp_text])
         usd = estimate_llm_cost_usd(model=model, total_tokens=total_tokens)

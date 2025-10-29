@@ -17,7 +17,7 @@ def get_llm(
     model: str | None = None,
     api_key: str | None = None,
     temperature: float = 0.7,
-    **kwargs,  # [CHANGED] 추가: streaming 등 모든 추가 파라미터 수용
+    **kwargs,
 ):
     """
     LLM 인스턴스 생성기. streaming=True 전달 시 스트리밍 가능.
