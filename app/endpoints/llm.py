@@ -148,8 +148,8 @@ def _run_qa(
 @router.post("/qa/stream")
 def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
     """
-    실시간 토큰 스트리밍 전송용 엔드포인트.
-    기존 /qa 는 JSON 응답, /qa/stream 은 토큰 단위 텍스트 스트림.
+    실시간 토큰 스트리밍 전송용 엔드포인트
+    기존 /qa 는 JSON 응답, /qa/stream 은 토큰 단위 텍스트 스트림(2가지임)
     """
     try:
         chain = make_qa_chain(
@@ -173,7 +173,7 @@ def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
         except Exception as e:
             yield f"\n[error] {e}"
 
-    # text/event-stream 으로도 가능. (브라우저 실시간 보기 원하면)
+    # text/event-stream 으로도 가능. (브라우저 실시간 보기용)
     return StreamingResponse(stream_gen(), media_type="text/plain")
 
 @router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse)
