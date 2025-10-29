@@ -27,6 +27,7 @@ def make_qa_chain(
     style: str = "friendly",
     max_ctx_chars: int = 12000,     # max context characters : context를 이 글자수로 잘라 LLM에 넣음/많으면 누락 감소 비용증가
     restrict_to_kb: bool = True,    # knowledge base 약자 : 찾은 context 근거로만 답함
+    streaming: bool = False,
 ):
     m = crud_model.get_single(db)
     if not m:
@@ -69,8 +70,12 @@ def make_qa_chain(
     provider = getattr(config, "LLM_PROVIDER", "openai")
     model = getattr(config, "LLM_MODEL",
         getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
-    llm = get_llm(provider=provider, model=model,
-        temperature = params.get("temperature", 0.7))
+    llm = get_llm(
+        provider=provider,
+        model=model,
+        temperature = params.get("temperature", 0.7),
+        streaming = streaming,
+    )
 
     return (
         RunnableMap({

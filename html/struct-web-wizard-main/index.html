@@ -296,7 +296,7 @@
       };
 
       // STT 설정
-      const STT_ENDPOINT = "/llm/clova_stt"; // 수정: /llm prefix 포함
+      const STT_ENDPOINT = "/llm/clova_stt";
       const STT_LANG = "Kor";
 
       const STORAGE_KEYS = { BASE_URL: "chat_api_base_url", SESSION_TITLE: "chat_session_title" };
@@ -378,7 +378,7 @@
         if (audioState.recorder && audioState.recorder.state === "recording") audioState.recorder.stop();
       }
 
-        // [교체] handleRecordingStop 전체
+      // [교체] handleRecordingStop 전체
       async function handleRecordingStop(mimeType) {
         if (audioState.timeoutId) { clearTimeout(audioState.timeoutId); audioState.timeoutId = null; }
         state.isRecording = false; updateMicButtonUI();
@@ -393,7 +393,7 @@
 
         const formData = new FormData();
         formData.append("file", blob, `recording.${extension}`);
-        formData.append("lang", STT_LANG); // v1: Kor/Eng/Jpn/Chn
+        formData.append("lang", STT_LANG);
 
         try {
           if (!state.baseUrl) throw new Error("API 주소를 먼저 설정해주세요.");
@@ -423,7 +423,6 @@
           updateMicButtonUI();
         }
       }
-
 
       async function startRecording() {
         if (!state.baseUrl) { showToast("먼저 API 주소를 설정해주세요.", "warning"); return; }
@@ -571,15 +570,28 @@
         } catch (error) { console.warn("세션 미리보기 업데이트 실패", error); }
       }
 
-      async function requestAssistantAnswer(question) {
+      // [ADDED] 스트리밍 호출
+      async function requestAssistantAnswerStream(question) {
         const topK = Number(elements.topKSelect.value) || 5;
         const knowledgeValue = elements.knowledgeSelect.value;
-        const payload = { question, top_k: topK, knowledge_id: knowledgeValue ? Number(knowledgeValue) : null };
-        const response = await fetch(`${state.baseUrl}/llm/chat/sessions/${state.sessionId}/qa`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        const payload = {
+          question,
+          top_k: topK,
+          knowledge_id: knowledgeValue ? Number(knowledgeValue) : null,
+          session_id: state.sessionId,
+          style: "friendly",
+        };
+
+        const response = await fetch(`${state.baseUrl}/llm/qa/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         });
-        if (!response.ok) { const message = await parseError(response); throw new Error(message); }
-        return response.json();
+        if (!response.ok) {
+          const message = await parseError(response);
+          throw new Error(message || "스트리밍 요청 실패");
+        }
+        return response.body.getReader(); // 스트림 리더 반환
       }
 
       async function handleSend() {
@@ -593,20 +605,42 @@
         await updatePreviewIfNeeded(message);
         await storeMessage("user", message);
 
+        // 타이핑 표시 후 첫 청크 수신 시 교체
         showTypingIndicator();
         const start = performance.now();
+
         try {
-          const data = await requestAssistantAnswer(message);
-          hideTypingIndicator();
-          const answer = data.answer?.trim?.() ? data.answer.trim() : "응답을 가져올 수 없습니다.";
-          appendMessage("assistant", answer);
+          const reader = await requestAssistantAnswerStream(message);
+          const decoder = new TextDecoder("utf-8");
+          let fullText = "";
+          let assistantRow = null;
+          let assistantBubble = null;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            if (!assistantRow) {
+              hideTypingIndicator();
+              assistantRow = appendMessage("assistant", "");
+              assistantBubble = assistantRow.querySelector(".message-bubble");
+            }
+            fullText += chunk;
+            assistantBubble.textContent = fullText;
+            scrollToBottom();
+          }
+
           const latency = Math.round(performance.now() - start);
-          await storeMessage("assistant", answer, latency);
+          await storeMessage("assistant", fullText || "응답이 비어 있습니다.", latency);
         } catch (error) {
-          hideTypingIndicator(); console.error("LLM 호출 오류", error);
+          hideTypingIndicator();
+          console.error("LLM 스트리밍 오류", error);
           appendMessage("assistant", error.message || "답변을 가져오지 못했습니다.");
           showToast(error.message || "답변 생성 중 오류가 발생했습니다.", "error");
-        } finally { setSendingState(false); }
+        } finally {
+          setSendingState(false);
+        }
       }
 
       function resetConversation({ keepBase = true } = {}) {

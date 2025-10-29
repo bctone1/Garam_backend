@@ -18,7 +18,7 @@ from langchain_service.llm.setup import get_llm
 from schemas.llm import ChatQARequest, QARequest, QAResponse, QASource
 from service.stt import transcribe_bytes
 from schemas.llm import STTResponse, STTQAParams
-
+from fastapi.responses import StreamingResponse
 from core import config
 from core.pricing import (
     tokens_for_texts,              # tiktoken 토큰 계산
@@ -102,18 +102,21 @@ def _run_qa(
             top_k=top_k,
             policy_flags=policy_flags or {},
             style=style or "friendly",
+            streaming=True,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     try:
-        raw = chain.invoke({"question": question})
+        raw = ''.join(chain.stream({"question": question}))
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="LLM 호출에 실패했습니다.") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
+                            detail="LLM 호출에 실패했습니다.") from exc
 
     # 비용 집계: tiktoken 합산(질문+응답 텍스트)
     try:
-        model = getattr(config, "DEFAULT_LLM_MODEL", "gpt-4o-mini")
+        model = getattr(config, "LLM_MODEL",
+                 getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
         resp_text = str(raw)
         total_tokens = tokens_for_texts(model, [question, resp_text])
         usd = estimate_llm_cost_usd(model=model, total_tokens=total_tokens)
@@ -142,6 +145,36 @@ def _run_qa(
         documents=sources,
     )
 
+@router.post("/qa/stream")
+def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
+    """
+    실시간 토큰 스트리밍 전송용 엔드포인트.
+    기존 /qa 는 JSON 응답, /qa/stream 은 토큰 단위 텍스트 스트림.
+    """
+    try:
+        chain = make_qa_chain(
+            db,
+            get_llm,
+            text_to_vector,
+            knowledge_id=payload.knowledge_id,
+            top_k=payload.top_k,
+            policy_flags={},
+            style=payload.style or "friendly",
+            streaming=True,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+
+    def stream_gen():
+        """LLM으로부터 토큰 스트림을 순차적으로 전송"""
+        try:
+            for chunk in chain.stream({"question": payload.question}):
+                yield chunk  # 각 토큰을 그대로 클라이언트에 전송
+        except Exception as e:
+            yield f"\n[error] {e}"
+
+    # text/event-stream 으로도 가능. (브라우저 실시간 보기 원하면)
+    return StreamingResponse(stream_gen(), media_type="text/plain")
 
 @router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse)
 def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depends(get_db)) -> QAResponse:
