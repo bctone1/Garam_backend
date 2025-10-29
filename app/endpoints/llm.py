@@ -108,7 +108,8 @@ def _run_qa(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     try:
-        raw = ''.join(chain.stream({"question": question}))
+        raw = chain.invoke({"question": question})
+        # raw = ''.join(chain.stream({"question": question}))
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
                             detail="LLM 호출에 실패했습니다.") from exc
