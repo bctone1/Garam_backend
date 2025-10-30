@@ -1,7 +1,5 @@
 # API/endpoints/model.py
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
-from typing import Optional
 from sqlalchemy.orm import Session
 from database.session import get_db
 from crud import model as crud
