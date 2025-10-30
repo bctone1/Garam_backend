@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from database.session import get_db
 from crud import model as crud
-from schemas.model import ModelUpdate, ModelResponse
+from schemas.model import ModelUpdate, ModelResponse, MetricsUpdateIn
 
 router = APIRouter(prefix="/model", tags=["Model"])
 
@@ -21,11 +21,6 @@ def update_model(payload: ModelUpdate, db: Session = Depends(get_db)):
     obj = crud.update_single(db, payload.model_dump(exclude_unset=True))
     return obj
 
-class MetricsUpdateIn(BaseModel):
-    accuracy: Optional[float] = Field(default=None, ge=0, le=100)
-    avg_response_time_ms: Optional[int] = Field(default=None, ge=0)
-    month_conversations: Optional[int] = Field(default=None, ge=0)
-    uptime_percent: Optional[float] = Field(default=None, ge=0, le=100)
 
 @router.put("/metrics", response_model=ModelResponse)
 def update_metrics(payload: MetricsUpdateIn, db: Session = Depends(get_db)):

@@ -44,3 +44,9 @@ class ModelResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}  # Pydantic v2
+
+class MetricsUpdateIn(BaseModel):
+    accuracy: Optional[float] = Field(default=None, ge=0, le=100)
+    avg_response_time_ms: Optional[int] = Field(default=None, ge=0)
+    month_conversations: Optional[int] = Field(default=None, ge=0)
+    uptime_percent: Optional[float] = Field(default=None, ge=0, le=100)
