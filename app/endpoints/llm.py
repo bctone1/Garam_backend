@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 
 from crud import chat as crud_chat
 from crud import knowledge as crud_knowledge
-from database.session import get_db
+from database.session import get_db, SessionLocal
 from langchain_service.chain.qa_chain import make_qa_chain
 from langchain_service.embedding.get_vector import text_to_vector
+from langchain_service.llm.runner import _to_vector, _update_last_user_vector, _build_sources, _run_qa
+
 from langchain_service.llm.setup import get_llm
 from schemas.llm import ChatQARequest, QARequest, QAResponse, QASource
 from service.stt import transcribe_bytes
@@ -40,141 +42,53 @@ def _ensure_session(db: Session, session_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
 
 
-def _to_vector(question: str) -> list[float]:
-    vector = text_to_vector(question)
-    if vector is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="임베딩 생성에 실패했습니다.")
-    vector_list = vector.tolist() if hasattr(vector, "tolist") else list(vector)
-    if not vector_list:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="임베딩 생성에 실패했습니다.")
-    return [float(v) for v in vector_list]
-
-
-def _update_last_user_vector(db: Session, session_id: int, vector: Iterable[float]) -> None:
-    message = crud_chat.last_by_role(db, session_id, "user")
-    if not message:
-        return
-    message.vector_memory = list(vector)
-    db.add(message)
-    db.commit()
-    db.refresh(message)
-
-
-def _build_sources(db: Session, vector: list[float], knowledge_id: Optional[int], top_k: int) -> list[QASource]:
-    chunks = crud_knowledge.search_chunks_by_vector(
-        db,
-        query_vector=vector,
-        knowledge_id=knowledge_id,
-        top_k=top_k,
-    )
-    return [
-        QASource(
-            chunk_id=chunk.id,
-            knowledge_id=chunk.knowledge_id,
-            page_id=chunk.page_id,
-            chunk_index=chunk.chunk_index,
-            text=chunk.chunk_text,
-        )
-        for chunk in chunks
-    ]
-
-
-def _run_qa(
-    db: Session,
-    *,
-    question: str,
-    knowledge_id: Optional[int],
-    top_k: int,
-    session_id: Optional[int] = None,
-    policy_flags: Optional[dict] = None,
-    style: Optional[str] = None,
-) -> QAResponse:
-    vector = _to_vector(question)
-    if session_id is not None:
-        _update_last_user_vector(db, session_id, vector)
-
-    try:
-        chain = make_qa_chain(
-            db,
-            get_llm,
-            text_to_vector,
-            knowledge_id=knowledge_id,
-            top_k=top_k,
-            policy_flags=policy_flags or {},
-            style=style or "friendly",
-            streaming=True,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-
-    try:
-        raw = chain.invoke({"question": question})
-        # raw = ''.join(chain.stream({"question": question}))
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail="LLM 호출에 실패했습니다.") from exc
-
-    # 비용 집계: tiktoken 합산(질문+응답 텍스트)
-    try:
-        model = getattr(config, "DEFAULT_LLM_MODEL", "gpt-4o-mini")
-        resp_text = str(raw)
-        total_tokens = tokens_for_texts(model, [question, resp_text])
-        usd = estimate_llm_cost_usd(model=model, total_tokens=total_tokens)
-
-        log.info("api-cost: will record llm tokens=%d usd=%s model=%s", total_tokens, usd, model)
-        crud_cost.add_event(
-            db,
-            ts_utc=datetime.now(timezone.utc),
-            product="llm",
-            model=model,
-            llm_tokens=total_tokens,
-            embedding_tokens=0,
-            audio_seconds=0,
-            cost_usd=usd,
-        )
-        log.info("api-cost: recorded llm tokens=%d usd=%s model=%s", total_tokens, usd, model)
-    except Exception as e:
-        log.exception("api-cost llm record failed: %s", e)
-
-    sources = _build_sources(db, vector, knowledge_id, top_k)
-    return QAResponse(
-        answer=str(raw),
-        question=question,
-        session_id=session_id,
-        sources=sources,
-        documents=sources,
-    )
-
 @router.post("/qa/stream")
 def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
-    """
-    실시간 토큰 스트리밍 전송용 엔드포인트
-    기존 /qa 는 JSON 응답, /qa/stream 은 토큰 단위 텍스트 스트림(2가지임)
-    """
     try:
         chain = make_qa_chain(
-            db,
-            get_llm,
-            text_to_vector,
-            knowledge_id=payload.knowledge_id,
-            top_k=payload.top_k,
-            policy_flags={},
-            style=payload.style or "friendly",
+            db, get_llm, text_to_vector,
+            knowledge_id=payload.knowledge_id, top_k=payload.top_k,
+            policy_flags={}, style=payload.style or "friendly",
             streaming=True,
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    model = getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini")
 
     def stream_gen():
-        """LLM으로부터 토큰 스트림을 순차적으로 전송"""
+        full = ""
         try:
             for chunk in chain.stream({"question": payload.question}):
-                yield chunk  # 각 토큰을 그대로 클라이언트에 전송
-        except Exception as e:
-            yield f"\n[error] {e}"
+                full += chunk
+                yield chunk
+        finally:
+            # 스트림 종료 시 토큰·비용 기록
+            try:
+                total = tokens_for_texts(model, [payload.question, full])
+                usd = estimate_llm_cost_usd(model=model, total_tokens=total)
+                with SessionLocal() as s:
+                    crud_cost.add_event(
+                        s,
+                        ts_utc=datetime.now(timezone.utc),
+                        product="llm", model=model,
+                        llm_tokens=total, embedding_tokens=0,
+                        audio_seconds=0, cost_usd=usd,
+                    )
+            except Exception as e:
+                log.exception("api-cost llm record failed: %s", e)
+
+    return StreamingResponse(stream_gen(), media_type="text/plain")
+    # def stream_gen():
+    #     """LLM으로부터 토큰 스트림을 순차적으로 전송"""
+    #     try:
+    #         for chunk in chain.stream({"question": payload.question}):
+    #             yield chunk  # 각 토큰을 그대로 클라이언트에 전송
+    #     except Exception as e:
+    #         yield f"\n[error] {e}"
 
     # text/event-stream 으로도 가능. (브라우저 실시간 보기용)
-    return StreamingResponse(stream_gen(), media_type="text/plain")
+    # return StreamingResponse(stream_gen(), media_type="text/plain")
 
 @router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse)
 def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depends(get_db)) -> QAResponse:
