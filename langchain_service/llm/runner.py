@@ -21,20 +21,10 @@ from core.pricing import (
 )
 
 from langchain_service.chain.qa_chain import make_qa_chain
-from langchain_service.embedding.get_vector import text_to_vector
+from langchain_service.embedding.get_vector import text_to_vector, _to_vector
 from langchain_service.llm.setup import get_llm
 
 log = logging.getLogger("api_cost")
-
-
-def _to_vector(question: str) -> list[float]:
-    vector = text_to_vector(question)
-    if vector is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="임베딩 생성에 실패했습니다.")
-    vector_list = vector.tolist() if hasattr(vector, "tolist") else list(vector)
-    if not vector_list:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="임베딩 생성에 실패했습니다.")
-    return [float(v) for v in vector_list]
 
 
 def _update_last_user_vector(db: Session, session_id: int, vector: Iterable[float]) -> None:

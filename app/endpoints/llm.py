@@ -13,9 +13,9 @@ from crud import chat as crud_chat
 from crud import knowledge as crud_knowledge
 from database.session import get_db, SessionLocal
 from langchain_service.chain.qa_chain import make_qa_chain
-from langchain_service.embedding.get_vector import text_to_vector
-from langchain_service.llm.runner import _to_vector, _update_last_user_vector, _build_sources, _run_qa
+from langchain_service.embedding.get_vector import text_to_vector, _to_vector
 
+from langchain_service.llm.runner import _update_last_user_vector, _build_sources, _run_qa
 from langchain_service.llm.setup import get_llm
 from schemas.llm import ChatQARequest, QARequest, QAResponse, QASource
 from service.stt import transcribe_bytes
@@ -30,6 +30,7 @@ from core.pricing import (
     normalize_usage_stt,           # STT 사용량 정규화
 )
 from crud import api_cost as crud_cost
+from service.stt import _wav_duration_seconds,_ensure_wav_16k_mono,_clova_transcribe
 
 log = logging.getLogger("api_cost")
 
@@ -184,67 +185,6 @@ async def stt_qa(
 
 
 # ===== Clova STT =====
-def _wav_duration_seconds(data: bytes) -> float:
-    try:
-        with wave.open(io.BytesIO(data), "rb") as w:
-            frames = w.getnframes()
-            rate = w.getframerate() or 16000
-            return max(0.0, frames / float(rate))
-    except Exception:
-        return 0.0
-
-
-def _ensure_wav_16k_mono(data: bytes, content_type: str) -> bytes:
-    if content_type in ("audio/wav", "audio/x-wav"):
-        return data
-    if not shutil.which("ffmpeg"):
-        return data
-    with tempfile.NamedTemporaryFile(delete=False) as raw:
-        raw.write(data)
-        raw.flush()
-        wav_path = raw.name + ".wav"
-    try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", raw.name, "-ac", "1", "-ar", "16000", wav_path],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        with open(wav_path, "rb") as f:
-            return f.read()
-    finally:
-        try:
-            os.remove(raw.name)
-        except:
-            pass
-        try:
-            os.remove(wav_path)
-        except:
-            pass
-
-
-def _clova_transcribe(data: bytes, lang: str) -> str:
-    if not CLOVA_STT_URL:
-        raise RuntimeError("CLOVA_STT_URL 미설정")
-    cid = os.getenv("CLOVA_STT_ID")
-    csec = os.getenv("CLOVA_STT_SECRET")
-    if not cid or not csec:
-        raise RuntimeError("CLOVA_STT_ID/CLOVA_STT_SECRET 미설정")
-    headers = {
-        "X-NCP-APIGW-API-KEY-ID": cid,
-        "X-NCP-APIGW-API-KEY": csec,
-        "Content-Type": "application/octet-stream",
-    }
-    url = f"{CLOVA_STT_URL}?lang={lang or 'ko-KR'}"
-    r = requests.post(url, headers=headers, data=data, timeout=30)
-    if r.status_code != 200:
-        raise RuntimeError(f"clova stt {r.status_code}: {r.text[:200]}")
-    text = r.json().get("text", "").strip()
-    if not text:
-        raise ValueError("empty transcription")
-    return text
-
-
 @router.post("/clova_stt", response_model=STTResponse)
 async def clova_stt(file: UploadFile = File(...), lang: str = Form("ko-KR"), db: Session = Depends(get_db)):
     try:
