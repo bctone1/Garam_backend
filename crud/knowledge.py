@@ -1,18 +1,12 @@
-# DB 접근 로직
-
 from __future__ import annotations
 from typing import Optional, List, Dict, Any, Literal, Sequence
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from models.knowledge import Knowledge, KnowledgePage, KnowledgeChunk
-from typing import Iterable
+
 KStatus = Literal["active", "processing", "error"]
 VectorArray = Sequence[float]
 
-
-# =========================
-# Knowledge
-# =========================
 def get_knowledge(db: Session, knowledge_id: int) -> Optional[Knowledge]:
     return db.get(Knowledge, knowledge_id)
 
@@ -316,3 +310,102 @@ def knowledge_stats(db: Session, knowledge_id: int) -> Dict[str, Any]:
         select(func.count()).select_from(KnowledgeChunk).where(KnowledgeChunk.knowledge_id == knowledge_id)
     ).scalar_one()
     return {"pages": int(pages or 0), "chunks": int(chunks or 0)}
+
+# ===== Convenience wrappers for endpoints (no breaking changes) =====
+from typing import Optional as _Optional  # alias to avoid shadowing
+from typing import List as _List, Dict as _Dict, Any as _Any
+
+def bulk_create_pages_any(db: Session, items: _List[_Dict[str, _Any]]) -> _List[KnowledgePage]:
+    """
+    엔드포인트에서 knowledge_id가 주입된 items를 그대로 받아 일괄 생성.
+    items 예: [{"knowledge_id": 1, "page_no": 3, "image_url": "..."}, ...]
+    반환: 생성된 KnowledgePage 리스트
+    """
+    objs: _List[KnowledgePage] = []
+    for p in items:
+        obj = KnowledgePage(
+            knowledge_id=int(p["knowledge_id"]),
+            page_no=int(p["page_no"]),
+            image_url=str(p.get("image_url") or ""),
+        )
+        db.add(obj)
+        objs.append(obj)
+    db.commit()
+    for o in objs:
+        db.refresh(o)
+    return objs
+
+
+def create_chunk_with_default_vector(
+    db: Session,
+    *,
+    knowledge_id: int,
+    page_id: _Optional[int],
+    chunk_index: int,
+    chunk_text: str,
+    vector_memory: _Optional[VectorArray],
+    vector_dim: int = 1536,
+) -> KnowledgeChunk:
+    """
+    vector_memory가 None이면 0.0으로 채운 기본 벡터를 사용해 chunk 생성.
+    """
+    vec = vector_memory if vector_memory is not None else [0.0] * vector_dim
+    return create_chunk(
+        db,
+        knowledge_id=knowledge_id,
+        page_id=page_id,
+        chunk_index=chunk_index,
+        chunk_text=chunk_text,
+        vector_memory=vec,
+    )
+
+
+def upsert_chunk_with_default_vector(
+    db: Session,
+    *,
+    knowledge_id: int,
+    page_id: _Optional[int],
+    chunk_index: int,
+    chunk_text: str,
+    vector_memory: _Optional[VectorArray],
+    vector_dim: int = 1536,
+) -> KnowledgeChunk:
+    """
+    vector_memory가 None이면 0.0으로 채운 기본 벡터를 사용해 upsert.
+    """
+    vec = vector_memory if vector_memory is not None else [0.0] * vector_dim
+    return upsert_chunk(
+        db,
+        knowledge_id=knowledge_id,
+        page_id=page_id,
+        chunk_index=chunk_index,
+        chunk_text=chunk_text,
+        vector_memory=vec,
+    )
+
+
+def bulk_upsert_chunks_with_default(
+    db: Session,
+    knowledge_id: int,
+    raw_items: _List[_Dict[str, _Any]],
+    vector_dim: int = 1536,
+) -> _List[KnowledgeChunk]:
+    """
+    엔드포인트에서 전달된 items를 받아 vector_memory가 없으면 기본 벡터로 보정 후 일괄 upsert.
+    raw_items 예:
+      [{"page_id":..., "chunk_index":..., "chunk_text":"...", "vector_memory":[... or None]}, ...]
+    """
+    items: _List[_Dict[str, _Any]] = []
+    for it in raw_items:
+        vec = it.get("vector_memory")
+        if vec is None:
+            vec = [0.0] * vector_dim
+        items.append(
+            {
+                "page_id": it.get("page_id"),
+                "chunk_index": int(it["chunk_index"]),
+                "chunk_text": str(it["chunk_text"]),
+                "vector_memory": vec,
+            }
+        )
+    return bulk_upsert_chunks(db, knowledge_id, items)

@@ -1,7 +1,7 @@
 # FastAPI 라우터
 from __future__ import annotations
 from typing import Optional, List, Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File,Form
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -9,15 +9,14 @@ from database.session import get_db
 from crud import knowledge as crud
 from schemas.knowledge import (
     KnowledgeCreate, KnowledgeUpdate, KnowledgeResponse,
-    KnowledgePageCreate, KnowledgePageUpdate, KnowledgePageResponse,
+    KnowledgePageCreate, KnowledgePageResponse,   # 사용 안 하는 KnowledgePageUpdate 제거
     KnowledgeChunkResponse)
 
 from service.upload_pipeline import UploadPipeline
 
 router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
 KStatus = Literal["active", "processing", "error"]
-VECTOR_DIM = 1536
-
+# VECTOR_DIM = 1536  # 기본 벡터 보정은 CRUD 래퍼로 위임하므로 제거
 
 # ---------- Knowledge ----------
 
@@ -123,7 +122,7 @@ def bulk_create_pages(knowledge_id: int, payload: PagesBulkCreateIn, db: Session
         raise HTTPException(status_code=404, detail="knowledge not found")
     # 안전을 위해 knowledge_id 강제 주입
     items = [{**p.model_dump(), "knowledge_id": knowledge_id} for p in payload.pages]
-    return crud.bulk_create_pages(db, items)
+    return crud.bulk_create_pages_any(db, items)  # ← 변경: 리턴 타입 정합성 맞는 CRUD 래퍼 사용
 
 
 # ---------- KnowledgeChunk ----------
@@ -167,14 +166,13 @@ def list_chunks(
 def create_chunk(knowledge_id: int, payload: ChunkCreateIn, db: Session = Depends(get_db)):
     if not crud.get_knowledge(db, knowledge_id):
         raise HTTPException(status_code=404, detail="knowledge not found")
-    vec = payload.vector_memory if payload.vector_memory is not None else [0.0] * VECTOR_DIM
-    return crud.create_chunk(
+    return crud.create_chunk_with_default_vector(  # ← 변경: 기본 벡터 보정은 CRUD 래퍼로 위임
         db,
         knowledge_id=knowledge_id,
         page_id=payload.page_id,
         chunk_index=payload.chunk_index,
         chunk_text=payload.chunk_text,
-        vector_memory=vec,
+        vector_memory=payload.vector_memory,
     )
 
 
@@ -182,14 +180,13 @@ def create_chunk(knowledge_id: int, payload: ChunkCreateIn, db: Session = Depend
 def upsert_chunk(knowledge_id: int, payload: ChunkUpsertIn, db: Session = Depends(get_db)):
     if not crud.get_knowledge(db, knowledge_id):
         raise HTTPException(status_code=404, detail="knowledge not found")
-    vec = payload.vector_memory if payload.vector_memory is not None else [0.0] * VECTOR_DIM
-    return crud.upsert_chunk(
+    return crud.upsert_chunk_with_default_vector(  # ← 변경
         db,
         knowledge_id=knowledge_id,
         page_id=payload.page_id,
         chunk_index=payload.chunk_index,
         chunk_text=payload.chunk_text,
-        vector_memory=vec,
+        vector_memory=payload.vector_memory,
     )
 
 
@@ -197,18 +194,16 @@ def upsert_chunk(knowledge_id: int, payload: ChunkUpsertIn, db: Session = Depend
 def bulk_upsert_chunks(knowledge_id: int, payload: ChunksBulkUpsertIn, db: Session = Depends(get_db)):
     if not crud.get_knowledge(db, knowledge_id):
         raise HTTPException(status_code=404, detail="knowledge not found")
-    items = []
-    for it in payload.items:
-        vec = it.vector_memory if it.vector_memory is not None else [0.0] * VECTOR_DIM
-        items.append(
-            {
-                "page_id": it.page_id,
-                "chunk_index": it.chunk_index,
-                "chunk_text": it.chunk_text,
-                "vector_memory": vec,
-            }
-        )
-    return crud.bulk_upsert_chunks(db, knowledge_id, items)
+    raw_items = [
+        {
+            "page_id": it.page_id,
+            "chunk_index": it.chunk_index,
+            "chunk_text": it.chunk_text,
+            "vector_memory": it.vector_memory,  # None → CRUD 래퍼에서 0.0 * 1536 보정
+        }
+        for it in payload.items
+    ]
+    return crud.bulk_upsert_chunks_with_default(db, knowledge_id, raw_items)  # ← 변경
 
 
 @router.get("/chunks/{chunk_id}", response_model=KnowledgeChunkResponse)
