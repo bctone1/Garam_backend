@@ -1,7 +1,7 @@
 # APP/llm.py
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 import os, tempfile, subprocess, shutil, requests, io, wave, logging
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -36,6 +36,27 @@ log = logging.getLogger("api_cost")
 
 router = APIRouter(prefix="/llm", tags=["LLM"])
 CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
+
+
+def _probe_duration_seconds(data: bytes) -> float:
+    """ffprobe로 비-WAV 파일 길이 추출"""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(data)
+            tmp.flush()
+            result = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", tmp.name],
+                capture_output=True, text=True, timeout=5
+            )
+            secs = float(result.stdout.strip())
+            return max(0.0, secs)
+    except Exception:
+        return 0.0
+    finally:
+        try: os.remove(tmp.name)
+        except: pass
+
 
 
 def _ensure_session(db: Session, session_id: int) -> None:
@@ -80,16 +101,7 @@ def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
                 log.exception("api-cost llm record failed: %s", e)
 
     return StreamingResponse(stream_gen(), media_type="text/plain")
-    # def stream_gen():
-    #     """LLM으로부터 토큰 스트림을 순차적으로 전송"""
-    #     try:
-    #         for chunk in chain.stream({"question": payload.question}):
-    #             yield chunk  # 각 토큰을 그대로 클라이언트에 전송
-    #     except Exception as e:
-    #         yield f"\n[error] {e}"
 
-    # text/event-stream 으로도 가능. (브라우저 실시간 보기용)
-    # return StreamingResponse(stream_gen(), media_type="text/plain")
 
 @router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse)
 def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depends(get_db)) -> QAResponse:
@@ -185,54 +197,46 @@ async def stt_qa(
 
 
 # ===== Clova STT =====
-@router.post("/clova_stt", response_model=STTResponse)
-async def clova_stt(file: UploadFile = File(...), lang: str = Form("ko-KR"), db: Session = Depends(get_db)):
-    try:
-        b = await file.read()
-        wav = _ensure_wav_16k_mono(b, file.content_type or "")
-        text = _clova_transcribe(wav, lang)
-        try:
-            secs = _wav_duration_seconds(wav)
-            summary = estimate_clova_stt([ClovaSttUsageEvent(mode="api", audio_seconds=secs)])
-            usage = normalize_usage_stt(summary.raw_seconds)
-            usd = summary.price_usd or Decimal("0")
-            log.info("api-cost: will record stt secs=%s bill=%s usd=%s", summary.raw_seconds, usage["audio_seconds"], usd)
-            crud_cost.add_event(
-                db,
-                ts_utc=datetime.now(timezone.utc),
-                product="stt",
-                model=getattr(config, "DEFAULT_STT_MODEL", "CLOVA_STT"),
-                llm_tokens=0,
-                embedding_tokens=0,
-                audio_seconds=usage["audio_seconds"],
-                cost_usd=usd,
-            )
-            log.info("api-cost: recorded stt secs=%s bill=%s usd=%s", summary.raw_seconds, usage["audio_seconds"], usd)
-        except Exception as e:
-            log.exception("api-cost stt record failed: %s", e)
-        return STTResponse(text=text)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="empty transcription")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"stt failed: {e}")
-
-
-@router.post("/clova_stt_qa", response_model=QAResponse)
-async def clova_stt_qa(
+@router.post("/clova_stt", response_model=Union[STTResponse, QAResponse])
+async def clova_stt(
     file: UploadFile = File(...),
-    params: STTQAParams = Depends(STTQAParams.as_form),
+    lang: str = Form("ko-KR"),
     db: Session = Depends(get_db),
+
+    # QA 모드용 선택 파라미터
+    knowledge_id: Optional[int] = Form(None),
+    top_k: int = Form(5),
+    session_id: Optional[int] = Form(None),
+    style: Optional[str] = Form(None),
+    block_inappropriate: Optional[bool] = Form(None),
+    restrict_non_tech: Optional[bool] = Form(None),
+    suggest_agent_handoff: Optional[bool] = Form(None),
 ):
     try:
-        b = await file.read()
-        wav = _ensure_wav_16k_mono(b, file.content_type or "")
-        text = _clova_transcribe(wav, params.lang)
+        raw = await file.read()
+        wav = _ensure_wav_16k_mono(raw, file.content_type or "")
+
+        # 1) STT
+        text = _clova_transcribe(wav, lang).strip()
+        if not text:
+            raise ValueError("empty transcription")
+
+        # 2) 길이 산출 → 비용 기록
+        secs = _wav_duration_seconds(wav)
+        if secs <= 0:
+            secs = _probe_duration_seconds(raw)
+        if secs <= 0:
+            log.warning("STT duration fallback to 6s (default)")
+            secs = 6.0
+
         try:
-            secs = _wav_duration_seconds(wav)
-            summary = estimate_clova_stt([ClovaSttUsageEvent(mode="api", audio_seconds=secs)])
+            summary = estimate_clova_stt([ClovaSttUsageEvent(mode="api", audio_seconds=float(secs))])
             usage = normalize_usage_stt(summary.raw_seconds)
             usd = summary.price_usd or Decimal("0")
-            log.info("api-cost: will record stt secs=%s bill=%s usd=%s", summary.raw_seconds, usage["audio_seconds"], usd)
+            log.info(
+                "api-cost: will record stt secs=%s bill=%s usd=%s",
+                summary.raw_seconds, usage["audio_seconds"], usd
+            )
             crud_cost.add_event(
                 db,
                 ts_utc=datetime.now(timezone.utc),
@@ -240,27 +244,46 @@ async def clova_stt_qa(
                 model=getattr(config, "DEFAULT_STT_MODEL", "CLOVA_STT"),
                 llm_tokens=0,
                 embedding_tokens=0,
-                audio_seconds=usage["audio_seconds"],
+                audio_seconds=int(usage["audio_seconds"]),
                 cost_usd=usd,
             )
-            log.info("api-cost: recorded stt secs=%s bill=%s usd=%s", summary.raw_seconds, usage["audio_seconds"], usd)
+            log.info(
+                "api-cost: recorded stt secs=%s bill=%s usd=%s",
+                summary.raw_seconds, usage["audio_seconds"], usd
+            )
         except Exception as e:
             log.exception("api-cost stt record failed: %s", e)
 
-        flags = {}
-        for k in ("block_inappropriate", "restrict_non_tech", "suggest_agent_handoff"):
-            v = getattr(params, k, None)
-            if v is not None:
-                flags[k] = v
+        # 3) QA 여부 결정
+        qa_mode = any([
+            knowledge_id is not None,
+            session_id is not None,
+            style is not None,
+            block_inappropriate is not None,
+            restrict_non_tech is not None,
+            suggest_agent_handoff is not None,
+        ])
+        if not qa_mode:
+            return STTResponse(text=text)
+
+        flags = {
+            k: v for k, v in {
+                "block_inappropriate": block_inappropriate,
+                "restrict_non_tech": restrict_non_tech,
+                "suggest_agent_handoff": suggest_agent_handoff,
+            }.items() if v is not None
+        }
+
         return _run_qa(
             db,
             question=text,
-            knowledge_id=params.knowledge_id,
-            top_k=params.top_k,
-            session_id=params.session_id,
+            knowledge_id=knowledge_id,
+            top_k=top_k,
+            session_id=session_id,
             policy_flags=flags,
-            style=params.style,
+            style=style,
         )
+
     except ValueError:
         raise HTTPException(status_code=422, detail="empty transcription")
     except Exception as e:

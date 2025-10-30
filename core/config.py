@@ -99,29 +99,9 @@ API_PRICING = {
         "gpt-4o-mini": {"per_1k_token_usd": 0.0016},
     },
     "stt": {
-        "CLOVA_STT": {"per_second_usd": 0.0002},  # 참고용
+        "CLOVA_STT": {"per_second_usd": 0.00019},  # 참고용
     },
 }
-
-# API_PRICING = {
-#     "embedding": {
-#         "text-embedding-3-small": {"per_1k_token_usd": 0.00002},  # $0.02 / 1M → $0.00002 / 1k
-#         # "text-embedding-3-large": {"per_1k_token_usd": 0.00013}, # $0.13 / 1M → $0.00013 / 1k
-#     },
-#     "llm": {
-#         "gpt-4o-mini": {
-#             "per_1k_token_usd_in": 0.0004,   # $0.4 / 1M
-#             "per_1k_token_usd_out": 0.0016,  # $1.6 / 1M
-#         },
-#     },
-#     "stt": {
-#         "CLOVA_STT": {"per_second_usd": 0.0002},
-#     },
-# }
-# LLM_TOKEN_MODE = "separate"
-# TOKEN_UNIT = 1000
-
-
 
 
 TIMEZONE = "Asia/Seoul"
@@ -134,7 +114,7 @@ DEFAULT_LLM_MODEL = "gpt-4o-mini"
 DEFAULT_STT_MODEL = "CLOVA_STT"
 
 # CLOVA STT 과금 규칙
-CLOVA_STT_BILLING_UNIT_SECONDS = 15   # 15초 단위 과금
-CLOVA_STT_PRICE_PER_UNIT_KRW = 4      # 15초당 4원
+CLOVA_STT_BILLING_UNIT_SECONDS = 6   # 6초 단위 과금
+CLOVA_STT_PRICE_PER_UNIT_KRW = 1.6      # 15초당 4원
 FX_KRW_PER_USD = 1400                 # 원→달러 환산. 미사용 시 None
 

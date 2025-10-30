@@ -46,15 +46,18 @@ def _wav_duration_seconds(data: bytes) -> float:
 
 
 def _ensure_wav_16k_mono(data: bytes, content_type: str) -> bytes:
-    """ffmpeg를 이용해 16kHz 모노 WAV로 변환"""
-    if content_type in ("audio/wav", "audio/x-wav"):
+    """16kHz mono WAV 변환 (webm/mp3/mp4 모두 포함)"""
+    # WAV가 아닌 경우는 전부 ffmpeg 변환
+    if content_type.startswith("audio/wav") or content_type.startswith("audio/x-wav"):
         return data
     if not shutil.which("ffmpeg"):
         return data
+
     with tempfile.NamedTemporaryFile(delete=False) as raw:
         raw.write(data)
         raw.flush()
         wav_path = raw.name + ".wav"
+
     try:
         subprocess.run(
             ["ffmpeg", "-y", "-i", raw.name, "-ac", "1", "-ar", "16000", wav_path],
