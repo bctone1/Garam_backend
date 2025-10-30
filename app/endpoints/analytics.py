@@ -99,6 +99,3 @@ def recompute(db: Session = Depends(get_db)):
     recompute_model_metrics(db)
     return {"ok": True}
 
-### 토큰 사용량에 대한 정의 들어갈 위치 ##
-# import tiktoken
-
