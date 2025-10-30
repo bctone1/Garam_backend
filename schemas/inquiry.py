@@ -64,3 +64,27 @@ class InquiryHistoryResponse(InquiryHistoryBase):
 
     class Config:
         from_attributes = True
+
+class AssignIn(BaseModel):
+    admin_id: int
+    actor_admin_id: Optional[int] = None
+
+class UnassignIn(BaseModel):
+    actor_admin_id: Optional[int] = None
+
+class TransferIn(BaseModel):
+    to_admin_id: int
+    actor_admin_id: Optional[int] = None
+
+class SetStatusIn(BaseModel):
+    status: Status
+    actor_admin_id: Optional[int] = None
+    details: Optional[str] = None
+
+class SatisfactionIn(BaseModel):
+    satisfaction: Satisfaction
+
+class HistoryNoteIn(BaseModel):
+    admin_id: Optional[int] = None
+    details: Optional[str] = None
+    action: Optional[str] = None
