@@ -69,7 +69,7 @@ class MessageResponse(MessageBase):
 # Feedback
 # -------------------------------
 class FeedbackBase(BaseModel):
-    rating: str       # 'helpful' | 'not_helpful'
+    rating: str       # 'helpful' | 'not_helpful' | null
     comment: Optional[str] = None
     session_id: Optional[int] = None
     message_id: Optional[int] = None
