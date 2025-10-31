@@ -47,3 +47,6 @@ python-multipart>=0.0.9
 tiktoken>=0.7.0
 uvicorn>=0.30.0
 
+langchain==0.2.*
+langchain-community==0.2.*
+langchain-openai==0.1.*

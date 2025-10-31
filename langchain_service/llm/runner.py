@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Iterable, Optional
 import logging
 from datetime import datetime, timezone
-
+from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,11 @@ from core.pricing import (
 from langchain_service.chain.qa_chain import make_qa_chain
 from langchain_service.embedding.get_vector import text_to_vector, _to_vector
 from langchain_service.llm.setup import get_llm
+try:
+    from langchain_community.callbacks import get_openai_callback
+except Exception:
+    get_openai_callback = None
+
 
 log = logging.getLogger("api_cost")
 
@@ -84,34 +89,69 @@ def _run_qa(
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
+    # 실제 호출 및 비용 집계
+    provider = getattr(config, "LLM_PROVIDER", "openai")
+    model = getattr(config, "LLM_MODEL", getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
+
     try:
-        raw = chain.invoke({"question": question})
-        # raw = ''.join(chain.stream({"question": question}))
+        if (provider == "openai") and (get_openai_callback is not None):
+            # 정확 집계 경로
+            with get_openai_callback() as cb:
+                raw = chain.invoke({"question": question})
+                prompt_toks = int(getattr(cb, "prompt_tokens", 0) or 0)
+                completion_toks = int(getattr(cb, "completion_tokens", 0) or 0)
+                total_tokens = int(getattr(cb, "total_tokens", prompt_toks + completion_toks) or 0)
+                # cb.total_cost는 float. Decimal로 변환해 저장 안정성 확보
+                usd = Decimal(str(getattr(cb, "total_cost", 0.0) or 0.0))
+
+            log.info(
+                "api-cost(openai): prompt=%d completion=%d total=%d usd=%s model=%s",
+                prompt_toks, completion_toks, total_tokens, usd, model
+            )
+            try:
+                crud_cost.add_event(
+                    db,
+                    ts_utc=datetime.now(timezone.utc),
+                    product="llm",
+                    model=model,
+                    llm_tokens=total_tokens,
+                    embedding_tokens=0,
+                    audio_seconds=0,
+                    cost_usd=usd,
+                )
+            except Exception as e:
+                log.exception("api-cost llm record failed: %s", e)
+
+
+        else:
+            # Fallback: 추정 계산
+            raw = chain.invoke({"question": question})
+
+            try:
+                resp_text = str(raw)
+                total_tokens = tokens_for_texts(model, [question, resp_text])
+                usd = estimate_llm_cost_usd(model=model, total_tokens=total_tokens)
+                log.info("api-cost(fallback): tokens=%d usd=%s model=%s", total_tokens, usd, model)
+                crud_cost.add_event(
+                    db,
+                    ts_utc=datetime.now(timezone.utc),
+                    product="llm",
+                    model=model,
+                    llm_tokens=total_tokens,
+                    embedding_tokens=0,
+                    audio_seconds=0,
+                    cost_usd=usd,
+                )
+            except Exception as e:
+                log.exception("api-cost llm record failed: %s", e)
+
+
+
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail="LLM 호출에 실패했습니다.") from exc
-
-    # 비용 집계: tiktoken 합산(질문+응답 텍스트)
-    try:
-        model = getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini")
-        resp_text = str(raw)
-        total_tokens = tokens_for_texts(model, [question, resp_text])
-        usd = estimate_llm_cost_usd(model=model, total_tokens=total_tokens)
-
-        log.info("api-cost: will record llm tokens=%d usd=%s model=%s", total_tokens, usd, model)
-        crud_cost.add_event(
-            db,
-            ts_utc=datetime.now(timezone.utc),
-            product="llm",
-            model=model,
-            llm_tokens=total_tokens,
-            embedding_tokens=0,
-            audio_seconds=0,
-            cost_usd=usd,
-        )
-        log.info("api-cost: recorded llm tokens=%d usd=%s model=%s", total_tokens, usd, model)
-    except Exception as e:
-        log.exception("api-cost llm record failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="LLM 호출에 실패했습니다."
+        ) from exc
 
     sources = _build_sources(db, vector, knowledge_id, top_k)
     return QAResponse(
