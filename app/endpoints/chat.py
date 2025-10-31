@@ -185,24 +185,12 @@ def get_feedback_for_session(session_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="not found")
     return obj
 
-# @router.get("/messages/{message_id}/feedback", response_model=FeedbackResponse)
-# def get_feedback_for_message(message_id: int, db: Session = Depends(get_db)):
-#     obj = crud.get_feedback_by_message(db, message_id)
-#     if not obj:
-#         raise HTTPException(status_code=404, detail="not found")
-#     return obj
-
 @router.delete("/sessions/{session_id}/feedback", status_code=status.HTTP_204_NO_CONTENT)
 def delete_feedback_for_session(session_id: int, db: Session = Depends(get_db)):
     if crud.delete_feedback_by_session(db, session_id) == 0:
         raise HTTPException(status_code=404, detail="not found")
     return None
 
-@router.delete("/messages/{message_id}/feedback", status_code=status.HTTP_204_NO_CONTENT)
-def delete_feedback_for_message(message_id: int, db: Session = Depends(get_db)):
-    if crud.delete_feedback_by_message(db, message_id) == 0:
-        raise HTTPException(status_code=404, detail="not found")
-    return None
 
 # -------- Session summary --------
 @router.get("/sessions/{session_id}/summary")

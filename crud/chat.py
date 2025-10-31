@@ -181,17 +181,13 @@ def create_feedback(
     db: Session,
     *,
     rating: Rating,
-    # comment: Optional[str] = None,
     session_id: Optional[int] = None,
-    # message_id: Optional[int] = None,
 ) -> Feedback:
-    # _validate_feedback_anchor(session_id, message_id)
     _validate_feedback_anchor(session_id)
-    # 부분 유니크 제약 대응: 이미 있으면 에러 대신 업데이트
+
     existing = get_feedback_by_session(db, session_id) if session_id else get_feedback_by_message(db, message_id)  # type: ignore[arg-type]
     if existing:
         existing.rating = rating
-        # existing.comment = comment
         db.add(existing)
         db.commit()
         db.refresh(existing)
@@ -199,9 +195,7 @@ def create_feedback(
 
     fb = Feedback(
         rating=rating,
-        # comment=comment,
         session_id=session_id,
-        # message_id=message_id,
     )
     db.add(fb)
     db.commit()
