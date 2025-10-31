@@ -193,13 +193,13 @@ def transfer(db: Session, inquiry_id: int, to_admin_id: int, *, actor_admin_id: 
     obj.assignee_admin_id = to_admin_id
     obj.assigned_at = datetime.now(timezone.utc)
     db.add(obj)
-    _add_history(
-        db,
-        inquiry_id,
-        action="transfer",
-        admin_name=_resolve_admin_name(db, actor_admin_id),
-        details=f"to_admin_id={to_admin_id}",
-    )
+    # _add_history(
+    #     db,
+    #     inquiry_id,
+    #     action="transfer",
+    #     admin_name=_resolve_admin_name(db, actor_admin_id),
+    #     details=f"to_admin_id={to_admin_id}",
+    # )
     db.commit()
     db.refresh(obj)
     return obj
@@ -220,13 +220,13 @@ def set_status(
     if status == "completed" and obj.completed_at is None:
         obj.completed_at = datetime.now(timezone.utc)
     db.add(obj)
-    _add_history(
-        db,
-        inquiry_id,
-        action=("complete" if status == "completed" else "note"),
-        admin_name=_resolve_admin_name(db, actor_admin_id),
-        details=(details or f"status={status}"),
-    )
+    # _add_history(
+    #     db,
+    #     inquiry_id,
+    #     action=("complete" if status == "completed" else "note"),
+    #     admin_name=_resolve_admin_name(db, actor_admin_id),
+    #     details=(details or f"status={status}"),
+    # )
     db.commit()
     db.refresh(obj)
     return obj

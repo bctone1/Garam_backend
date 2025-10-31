@@ -591,6 +591,7 @@
           const message = await parseError(response);
           throw new Error(message || "스트리밍 요청 실패");
         }
+        console.log(response);
         return response.body.getReader(); // 스트림 리더 반환
       }
 
