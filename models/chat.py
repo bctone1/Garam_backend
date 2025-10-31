@@ -79,10 +79,10 @@ class Feedback(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
 
     session_id = Column(BigInteger, ForeignKey("chat_session.id", ondelete="CASCADE"))
-    message_id = Column(BigInteger, ForeignKey("message.id", ondelete="CASCADE"))
+    # message_id = Column(BigInteger, ForeignKey("message.id", ondelete="CASCADE"))
 
     rating = Column(String, nullable=True)   # 'helpful' | 'not_helpful' | null
-    comment = Column(Text)
+    # comment = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # 관계
@@ -91,20 +91,20 @@ class Feedback(Base):
 
     __table_args__ = (
         CheckConstraint("rating IN ('helpful','not_helpful')", name="chk_feedback_rating"),
-        CheckConstraint(
-            "(session_id IS NOT NULL) <> (message_id IS NOT NULL)",
-            name="chk_feedback_anchor_xor",
-        ),
+        # CheckConstraint(
+            # "(session_id IS NOT NULL) <> (message_id IS NOT NULL)",
+            # name="chk_feedback_anchor_xor",
+        # ),
         Index("idx_feedback_session", "session_id", "created_at"),
-        Index("idx_feedback_message", "message_id"),
+        # Index("idx_feedback_message", "message_id"),
         Index("idx_feedback_created", "created_at"),
         Index("idx_feedback_rating_time", "rating", "created_at"),
-        Index(
-            "uq_feedback_message_once",
-            "message_id",
-            unique=True,
-            postgresql_where=text("message_id IS NOT NULL"),
-        ),
+        # Index(
+        #     "uq_feedback_message_once",
+        #     "message_id",
+        #     unique=True,
+        #     postgresql_where=text("message_id IS NOT NULL"),
+        # ),
         Index(
             "uq_feedback_session_once",
             "session_id",
