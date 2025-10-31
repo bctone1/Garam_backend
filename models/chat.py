@@ -81,7 +81,7 @@ class Feedback(Base):
     session_id = Column(BigInteger, ForeignKey("chat_session.id", ondelete="CASCADE"))
     message_id = Column(BigInteger, ForeignKey("message.id", ondelete="CASCADE"))
 
-    rating = Column(String, nullable=False)   # 'helpful' | 'not_helpful'
+    rating = Column(String, nullable=True)   # 'helpful' | 'not_helpful' | null
     comment = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

@@ -99,7 +99,7 @@ API_PRICING = {
         "gpt-4o-mini": {"per_1k_token_usd": 0.0016},
     },
     "stt": {
-        "CLOVA_STT": {"per_second_usd": 0.0002},  # 참고용
+        "CLOVA_STT": {"per_second_usd": 0.0002},  # 엄밀히 0.00019(환율차로 무의미)
     },
 }
 
