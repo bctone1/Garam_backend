@@ -1,14 +1,11 @@
+# langchain_service/chain/qa_chain.py
 from operator import itemgetter
-from typing import Optional, Callable
+from typing import Optional, Callable, List, Any
 from sqlalchemy.orm import Session
 
 from langchain_core.runnables import RunnableLambda, RunnableMap
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-
-# session 안에서의 대화내용을 기억하면서 대화하기
-# from langchain_core.runnables.history import RunnableWithMessageHistory
-# from langchain_core.chat_history import InMemoryChatMessageHistory
 
 from crud import model as crud_model
 from crud.knowledge import search_chunks_by_vector
@@ -25,26 +22,17 @@ def make_qa_chain(
     top_k: int = 8,
     policy_flags: dict | None = None,
     style: str = "friendly",
-    max_ctx_chars: int = 12000,     # max context characters : context를 이 글자수로 잘라 LLM에 넣음/많으면 누락 감소 비용증가
-    restrict_to_kb: bool = True,    # knowledge base 약자 : 찾은 context 근거로만 답함
+    max_ctx_chars: int = 12000,
+    restrict_to_kb: bool = True,
     streaming: bool = False,
+    callbacks: Optional[List[Any]] = None,  # 비용 집계용 콜백
 ):
     m = crud_model.get_single(db)
     if not m:
         raise RuntimeError("model not initialized")
 
-    style = style if style in STYLE_MAP else "friendly"  # 안전 보정
+    style = style if style in STYLE_MAP else "friendly"
     system_txt = build_system_prompt(style=style, **(policy_flags or {}))
-
-    # LLM 답변 범위 규정
-    guard_msg = (
-        "다음은 지식베이스 컨텍스트다.\n{context}\n"
-        "컨텍스트 밖이면 '해당내용은 찾을 수 없음'이라고만 답하라."
-        if restrict_to_kb
-        else
-        "다음은 지식베이스 컨텍스트다.\n{context}\n"
-        "컨텍스트를 우선해 답하고, 없으면 모른다고 간단히 답하라."
-    )
 
     def _retrieve(question: str) -> str:
         vec = text_to_vector(question)
@@ -57,25 +45,32 @@ def make_qa_chain(
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_txt + "\n"
-        "규칙: 제공된 컨텍스트를 우선하여 답하고, 정말 관련이 없을 때만 "
-        "짧게 '해당내용은 찾을 수 없음'이라고 답하라."),
+         "규칙: 제공된 컨텍스트를 우선하여 답하고, 정말 관련이 없을 때만 "
+         "짧게 '해당내용은 찾을 수 없음'이라고 답하라."),
         ("human",
-        "다음 컨텍스트만 근거로 답하세요.\n"
-        "[컨텍스트 시작]\n{context}\n[컨텍스트 끝]\n\n"
-        "질문: {question}")
+         "다음 컨텍스트만 근거로 답하세요.\n"
+         "[컨텍스트 시작]\n{context}\n[컨텍스트 끝]\n\n"
+         "질문: {question}")
     ])
-
 
     params = llm_params(m.fast_response_mode)
     provider = getattr(config, "LLM_PROVIDER", "openai")
     model = getattr(config, "LLM_MODEL",
-        getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
+                    getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
+
     llm = get_llm(
         provider=provider,
         model=model,
-        temperature = params.get("temperature", 0.7),
-        streaming = streaming,
+        temperature=params.get("temperature", 0.7),
+        streaming=streaming,
     )
+
+    # 콜백을 LLM 노드에 직접 주입 (+run_name)
+    if callbacks:
+        try:
+            llm = llm.with_config(callbacks=callbacks, run_name="qa_llm")
+        except Exception:
+            pass
 
     return (
         RunnableMap({

@@ -32,10 +32,33 @@ from core.pricing import (
 from crud import api_cost as crud_cost
 from service.stt import _wav_duration_seconds,_ensure_wav_16k_mono,_clova_transcribe
 
+from langchain_service.prompt.style import build_system_prompt
+try:
+    from langchain_community.callbacks import get_openai_callback
+except Exception:
+    get_openai_callback = None
+
 log = logging.getLogger("api_cost")
 
 router = APIRouter(prefix="/llm", tags=["LLM"])
 CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
+
+# 프롬프트 전체 조각 생성
+def _prompt_parts_for_estimate(question: str, context_text: str, style: Optional[str], policy_flags: Optional[dict]) -> list[str]:
+    system_txt = build_system_prompt(style=(style or "friendly"), **(policy_flags or {}))
+    rule_txt = (
+        "규칙: 제공된 컨텍스트를 우선하여 답하고, 정말 관련이 없을 때만 "
+        "짧게 '해당내용은 찾을 수 없음'이라고 답하라."
+    )
+    return [
+        system_txt,
+        rule_txt,
+        "다음 컨텍스트만 근거로 답하세요.\n[컨텍스트 시작]",
+        context_text,
+        "[컨텍스트 끝]",
+        "질문: " + question,
+    ]
+
 
 
 def _probe_duration_seconds(data: bytes) -> float:
@@ -64,43 +87,94 @@ def _ensure_session(db: Session, session_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
 
 
+# 스트리밍 엔드포인트 집계 버전
 @router.post("/qa/stream")
 def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
+    # 체인 생성 전 컨텍스트 확보(보정 토큰 계산용)
     try:
-        chain = make_qa_chain(
-            db, get_llm, text_to_vector,
-            knowledge_id=payload.knowledge_id, top_k=payload.top_k,
-            policy_flags={}, style=payload.style or "friendly",
-            streaming=True,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        vec = _to_vector(payload.question)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="임베딩 생성에 실패했습니다.") from exc
 
-    model = getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini")
+    sources = _build_sources(db, vec, payload.knowledge_id, payload.top_k)
+    context_text = ("\n\n".join(s.text for s in sources))[:12000]
+
+    provider = getattr(config, "LLM_PROVIDER", "openai").lower()
+    model = getattr(config, "LLM_MODEL", getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
+    style = payload.style or "friendly"
+    flags: dict = {}  # 필요 시 확장
 
     def stream_gen():
-        full = ""
-        try:
-            for chunk in chain.stream({"question": payload.question}):
-                full += chunk
-                yield chunk
-        finally:
-            # 스트림 종료 시 토큰·비용 기록
+        # OpenAI 콜백 가능한 경우: 콜백 + 보정치 동시 사용
+        if provider == "openai" and get_openai_callback is not None:
+            with get_openai_callback() as cb:
+                try:
+                    chain = make_qa_chain(
+                        db, get_llm, text_to_vector,
+                        knowledge_id=payload.knowledge_id, top_k=payload.top_k,
+                        policy_flags=flags, style=style, streaming=True, callbacks=[cb],
+                    )
+                except RuntimeError as exc:
+                    raise HTTPException(status_code=503, detail=str(exc))
+
+                full = ""
+                try:
+                    for chunk in chain.stream({"question": payload.question}, config={"callbacks": [cb]}):
+                        full += chunk
+                        yield chunk
+                finally:
+                    try:
+                        prompt_parts = _prompt_parts_for_estimate(payload.question, context_text, style, flags)
+                        est_tokens = tokens_for_texts(model, prompt_parts + [full])
+                        cb_total = int(getattr(cb, "total_tokens", 0) or 0)
+                        total = max(cb_total, est_tokens)
+
+                        usd_cb = Decimal(str(getattr(cb, "total_cost", 0.0) or 0.0))
+                        usd_est = estimate_llm_cost_usd(model=model, total_tokens=total)
+                        usd = max(usd_cb, usd_est)
+
+                        crud_cost.add_event(
+                            db,
+                            ts_utc=datetime.now(timezone.utc),
+                            product="llm", model=model,
+                            llm_tokens=total, embedding_tokens=0,
+                            audio_seconds=0, cost_usd=usd,
+                        )
+                    except Exception as e:
+                        log.exception("api-cost llm record failed: %s", e)
+        else:
+            # 콜백 불가(타사 모델 등): 프롬프트 전체 기준 추정
             try:
-                total = tokens_for_texts(model, [payload.question, full])
-                usd = estimate_llm_cost_usd(model=model, total_tokens=total)
-                with SessionLocal() as s:
+                chain = make_qa_chain(
+                    db, get_llm, text_to_vector,
+                    knowledge_id=payload.knowledge_id, top_k=payload.top_k,
+                    policy_flags=flags, style=style, streaming=True,
+                )
+            except RuntimeError as exc:
+                raise HTTPException(status_code=503, detail=str(exc))
+
+            full = ""
+            try:
+                for chunk in chain.stream({"question": payload.question}):
+                    full += chunk
+                    yield chunk
+            finally:
+                try:
+                    prompt_parts = _prompt_parts_for_estimate(payload.question, context_text, style, flags)
+                    total = tokens_for_texts(model, prompt_parts + [full])
+                    usd = estimate_llm_cost_usd(model=model, total_tokens=total)
                     crud_cost.add_event(
-                        s,
+                        db,
                         ts_utc=datetime.now(timezone.utc),
                         product="llm", model=model,
                         llm_tokens=total, embedding_tokens=0,
                         audio_seconds=0, cost_usd=usd,
                     )
-            except Exception as e:
-                log.exception("api-cost llm record failed: %s", e)
+                except Exception as e:
+                    log.exception("api-cost llm record failed: %s", e)
 
     return StreamingResponse(stream_gen(), media_type="text/plain")
+
 
 
 @router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse)
