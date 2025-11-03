@@ -96,7 +96,7 @@ API_PRICING = {
         # "text-embedding-3-large": {"per_1k_token_usd": 0.13},
     },
     "llm": {
-        "gpt-4o-mini": {"per_1k_token_usd": 0.0016},
+        "gpt-4o-mini": {"per_1k_token_usd": 0.00004},    # 대략적으로 잡음
     },
     "stt": {
         "CLOVA_STT": {"per_second_usd": 0.0002},  # 엄밀히 0.00019(환율차로 무의미)
