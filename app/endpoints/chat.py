@@ -171,9 +171,7 @@ def create_feedback(payload: FeedbackCreate, db: Session = Depends(get_db)):
         return crud.create_feedback(
             db,
             rating=payload.rating,  # type: ignore[arg-type]
-            # comment=payload.comment,
             session_id=payload.session_id,
-            # message_id=payload.message_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
