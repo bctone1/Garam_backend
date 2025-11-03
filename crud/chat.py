@@ -161,19 +161,8 @@ def last_by_role(db: Session, session_id: int, role: Role) -> Optional[Message]:
 
 
 # ========== Feedback ==========
-def _validate_feedback_anchor(session_id: Optional[int], message_id: Optional[int]) -> None:
-    # XOR : 둘중에 하나는 반드시 null 값 이어야 함
-    if bool(session_id) == bool(message_id):
-        raise ValueError("feedback must anchor to exactly one of session_id or message_id")
-
-
 def get_feedback_by_session(db: Session, session_id: int) -> Optional[Feedback]:
     stmt = select(Feedback).where(Feedback.session_id == session_id).limit(1)
-    return db.execute(stmt).scalar_one_or_none()
-
-
-def get_feedback_by_message(db: Session, message_id: int) -> Optional[Feedback]:
-    stmt = select(Feedback).where(Feedback.message_id == message_id).limit(1)
     return db.execute(stmt).scalar_one_or_none()
 
 
@@ -181,11 +170,9 @@ def create_feedback(
     db: Session,
     *,
     rating: Rating,
-    session_id: Optional[int] = None,
+    session_id: int,
 ) -> Feedback:
-    _validate_feedback_anchor(session_id)
-
-    existing = get_feedback_by_session(db, session_id) if session_id else get_feedback_by_message(db, message_id)  # type: ignore[arg-type]
+    existing = get_feedback_by_session(db, session_id)
     if existing:
         existing.rating = rating
         db.add(existing)
@@ -193,10 +180,7 @@ def create_feedback(
         db.refresh(existing)
         return existing
 
-    fb = Feedback(
-        rating=rating,
-        session_id=session_id,
-    )
+    fb = Feedback(rating=rating, session_id=session_id)
     db.add(fb)
     db.commit()
     db.refresh(fb)
@@ -205,15 +189,6 @@ def create_feedback(
 
 def delete_feedback_by_session(db: Session, session_id: int) -> int:
     fb = get_feedback_by_session(db, session_id)
-    if not fb:
-        return 0
-    db.delete(fb)
-    db.commit()
-    return 1
-
-
-def delete_feedback_by_message(db: Session, message_id: int) -> int:
-    fb = get_feedback_by_message(db, message_id)
     if not fb:
         return 0
     db.delete(fb)
