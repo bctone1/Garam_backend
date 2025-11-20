@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from crud import chat as crud_chat
 from crud import knowledge as crud_knowledge
 from crud import api_cost as crud_cost
-
+from crud import model as crud_model
 from schemas.llm import QASource, QAResponse
 
 from core import config
@@ -104,6 +104,15 @@ def _run_qa(
     policy_flags: Optional[dict] = None,
     style: Optional[str] = None,
 ) -> QAResponse:
+    if style is None:
+        m = crud_model.get_single(db)
+        if not m:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="model not initialized",
+            )
+        style = m.response_style  # 'professional' | 'friendly' | 'concise'
+
     vector = _to_vector(question)
     if session_id is not None:
         _update_last_user_vector(db, session_id, vector)
@@ -176,7 +185,7 @@ def _run_qa(
                 knowledge_id=knowledge_id,
                 top_k=top_k,
                 policy_flags=policy_flags or {},
-                style=style or "friendly",
+                style=style,
                 streaming=True,
             )
             raw = "".join(chain.stream({"question": question}))
