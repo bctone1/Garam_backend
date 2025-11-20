@@ -125,7 +125,7 @@ def _run_qa(
                     knowledge_id=knowledge_id,
                     top_k=top_k,
                     policy_flags=policy_flags or {},
-                    style=style or "friendly",
+                    style=style,
                     streaming=True,
                     callbacks=[cb]
                 )

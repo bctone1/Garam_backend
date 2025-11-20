@@ -21,7 +21,7 @@ def make_qa_chain(
     knowledge_id: Optional[int] = None,
     top_k: int = 8,
     policy_flags: dict | None = None,
-    style: str = "friendly",
+    style: Optional[str] = None,
     max_ctx_chars: int = 12000,
     restrict_to_kb: bool = True,
     streaming: bool = False,
@@ -31,8 +31,14 @@ def make_qa_chain(
     if not m:
         raise RuntimeError("model not initialized")
 
-    style = style if style in STYLE_MAP else "friendly"
-    system_txt = build_system_prompt(style=style, **(policy_flags or {}))
+    # 1) 스타일 소스 결정: 인자 > DB > 기본값
+    style_key = style or getattr(m, "response_style", None) or "friendly"
+
+    # 2) 안전하게 검증
+    if style_key not in STYLE_MAP:
+        style_key = "friendly"
+
+    system_txt = build_system_prompt(style=style_key, **(policy_flags or {}))
 
     def _retrieve(question: str) -> str:
         vec = text_to_vector(question)
