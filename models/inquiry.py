@@ -19,7 +19,9 @@ class Inquiry(Base):
     status = Column(String, nullable=False, server_default="new")
 
     assignee_admin_id = Column(
-        BigInteger, ForeignKey("admin_user.id", ondelete="SET NULL"), nullable=True
+        BigInteger,
+        ForeignKey("admin_user.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -27,30 +29,49 @@ class Inquiry(Base):
     completed_at = Column(DateTime(timezone=True))
     customer_satisfaction = Column(String)
 
-    assignee = relationship("AdminUser", backref="inquiries", foreign_keys=[assignee_admin_id])
-    histories = relationship("InquiryHistory", back_populates="inquiry", cascade="all, delete-orphan",order_by="InquiryHistory.id.asc()" )
+    assignee = relationship(
+        "AdminUser",
+        backref="inquiries",
+        foreign_keys=[assignee_admin_id],
+    )
+    histories = relationship(
+        "InquiryHistory",
+        back_populates="inquiry",
+        cascade="all, delete-orphan",
+        order_by="InquiryHistory.id.asc()",
+    )
 
     __table_args__ = (
-        CheckConstraint("status IN ('new','processing','on_hold','completed')", name="chk_inquiry_status"),
         CheckConstraint(
-            "(assignee_admin_id IS NULL AND assigned_at IS NULL) OR "
-            "(assignee_admin_id IS NOT NULL AND assigned_at IS NOT NULL)",
-            name="chk_inquiry_assignment_consistency"
+            "status IN ('new','processing','on_hold','completed')",
+            name="chk_inquiry_status",
         ),
-        CheckConstraint("status <> 'completed' OR completed_at IS NOT NULL", name="chk_inquiry_completion_consistency"),
-        CheckConstraint("assigned_at IS NULL OR assigned_at >= created_at", name="chk_inquiry_assigned_after_created"),
+        # 담당자가 없어지면(SET NULL) assigned_at 이 남아 있어도 허용
+        CheckConstraint(
+            "assignee_admin_id IS NULL OR assigned_at IS NOT NULL",
+            name="chk_inquiry_assignment_consistency",
+        ),
+        CheckConstraint(
+            "status <> 'completed' OR completed_at IS NOT NULL",
+            name="chk_inquiry_completion_consistency",
+        ),
+        CheckConstraint(
+            "assigned_at IS NULL OR assigned_at >= created_at",
+            name="chk_inquiry_assigned_after_created",
+        ),
         CheckConstraint(
             "completed_at IS NULL OR completed_at >= COALESCE(assigned_at, created_at)",
-            name="chk_inquiry_completed_after_assigned"
+            name="chk_inquiry_completed_after_assigned",
         ),
         CheckConstraint(
             "customer_satisfaction IS NULL OR customer_satisfaction IN ('satisfied','unsatisfied')",
-            name="chk_inquiry_customer_satisfaction"
+            name="chk_inquiry_customer_satisfaction",
         ),
         Index("idx_inquiry_status_created", "status", "created_at"),
         Index("idx_inquiry_assignee_status", "assignee_admin_id", "status", "created_at"),
         Index("idx_inquiry_created", "created_at"),
     )
+
 
 class InquiryHistory(Base):
     __tablename__ = "inquiry_history"
