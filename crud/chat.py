@@ -6,12 +6,29 @@ from datetime import datetime, timezone
 from sqlalchemy import select, update as sa_update, func
 from sqlalchemy.orm import Session
 from models.chat import ChatSession, Message, Feedback
-
+from fastapi.encoders import jsonable_encoder
 Role = Literal["user", "assistant"]
-
+VECTOR_DIM = 1536
 # 무응답은 계산하지 않음
 ## 도움:4 / 미도움:1 / 무응답 : 5 => 문제해결률은 80% (not 40%)
 Rating = Literal["helpful", "not_helpful"]
+
+# ---------- helpers ----------
+def _safe_extra(extra_data: Any) -> Optional[dict]:
+    """
+    JSON 컬럼에 안전하게 들어가도록 변환.
+    (numpy 타입, datetime, pydantic 객체 등 섞여도 안전)
+    """
+    if extra_data is None:
+        return None
+    if isinstance(extra_data, str) and extra_data.lower() == "null":
+        return None
+    try:
+        encoded = jsonable_encoder(extra_data)
+        # jsonable_encoder가 list/str 등을 리턴할 수도 있으니 dict로 감싸고 싶으면 여기서 처리
+        return encoded if isinstance(encoded, dict) else {"value": encoded}
+    except Exception:
+        return {"value": str(extra_data)}
 
 
 # ========== ChatSession ==========
@@ -106,6 +123,7 @@ def list_messages(
     return db.execute(stmt).scalars().all()
 
 
+
 def create_message(
     db: Session,
     *,
@@ -122,13 +140,65 @@ def create_message(
         content=content,
         response_latency_ms=response_latency_ms,
         vector_memory=vector_memory,
-        extra_data=extra_data,
+        extra_data=jsonable_encoder(extra_data) if extra_data is not None else None,
     )
     db.add(msg)
-    db.commit()
-    db.refresh(msg)
-    return msg
+    try:
+        db.commit()
+        db.refresh(msg)
+        return msg
+    except Exception:
+        db.rollback()
+        raise
 
+
+def create_assistant_message(
+    db: Session,
+    *,
+    session_id: int,
+    content: str,
+    response_latency_ms: int,
+    extra_data: Optional[Any] = None,
+    commit: bool = True,
+) -> Message:
+    # assistant는 vector_memory=None 고정, latency 필수
+    if response_latency_ms is None:
+        raise ValueError("response_latency_ms is required for assistant messages")
+
+    return create_message(
+        db,
+        session_id=session_id,
+        role="assistant",
+        content=content,
+        vector_memory=None,
+        response_latency_ms=int(response_latency_ms),
+        extra_data=extra_data,
+        commit=commit,
+    )
+
+
+def create_user_message(
+    db: Session,
+    *,
+    session_id: int,
+    content: str,
+    vector_memory: List[float],
+    extra_data: Optional[Any] = None,
+    commit: bool = True,
+) -> Message:
+    if vector_memory is None or len(vector_memory) != VECTOR_DIM:
+        raise ValueError(f"vector_memory must be length {VECTOR_DIM} for user messages")
+
+    return create_message(
+        db,
+        session_id=session_id,
+        role="user",
+        content=content,
+        vector_memory=vector_memory,
+        response_latency_ms=None,
+        extra_data=extra_data,
+        commit=commit,
+    )
 
 def delete_message(db: Session, message_id: int) -> bool:
     obj = get_message(db, message_id)

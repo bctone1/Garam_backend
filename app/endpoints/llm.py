@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from typing import Iterable, Optional, Union
-import os, tempfile, subprocess, shutil, requests, io, wave, logging
+import os, tempfile, subprocess, shutil, requests, io, wave, logging, time
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -31,7 +31,7 @@ from core.pricing import (
 )
 from crud import api_cost as crud_cost
 from service.stt import _wav_duration_seconds,_ensure_wav_16k_mono,_clova_transcribe
-
+from fastapi.encoders import jsonable_encoder
 from langchain_service.prompt.style import build_system_prompt
 try:
     from langchain_community.callbacks import get_openai_callback
@@ -177,9 +177,14 @@ def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
 
 
 
-@router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse)
+@router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse, summary="LLM 입력창")
 def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depends(get_db)) -> QAResponse:
     _ensure_session(db, session_id)
+
+    # 이 엔드포인트는 유저 질문을 받는 용도
+    if getattr(payload, "role", "user") != "user":
+        raise HTTPException(status_code=400, detail="role must be 'user'")
+
     flags = {
         k: v
         for k, v in {
@@ -189,7 +194,25 @@ def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depend
         }.items()
         if v is not None
     }
-    return _run_qa(
+
+    # 1) user 메시지 저장 (vector_memory는 우선 None으로도 OK)
+    crud_chat.create_message(
+        db,
+        session_id=session_id,
+        role="user",
+        content=payload.question,
+        vector_memory=None,
+        response_latency_ms=None,
+        extra_data={
+            "knowledge_id": payload.knowledge_id,
+            "top_k": payload.top_k,
+            "style": payload.style,
+            "policy_flags": flags,
+        },
+    )
+
+    t0 = time.perf_counter()
+    resp = _run_qa(
         db,
         question=payload.question,
         knowledge_id=payload.knowledge_id,
@@ -198,6 +221,26 @@ def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depend
         policy_flags=flags,
         style=payload.style,
     )
+    latency_ms = int((time.perf_counter() - t0) * 1000)
+
+    # 2) assistant 메시지 저장
+    crud_chat.create_message(
+        db,
+        session_id=session_id,
+        role="assistant",
+        content=resp.answer,
+        vector_memory=None,
+        response_latency_ms=latency_ms,
+        extra_data=jsonable_encoder({
+            "knowledge_id": payload.knowledge_id,
+            "top_k": payload.top_k,
+            "style": payload.style,
+            "policy_flags": flags,
+            "sources": [s.model_dump() for s in (resp.sources or [])],
+        }),
+    )
+
+    return resp
 
 
 @router.post("/qa", response_model=QAResponse)
