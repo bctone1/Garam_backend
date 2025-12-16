@@ -1,7 +1,8 @@
 # APP/llm.py
 from __future__ import annotations
 
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional, Union, Any, Dict, List, Literal
+
 import os, tempfile, subprocess, shutil, requests, io, wave, logging, time
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -405,3 +406,39 @@ async def clova_stt(
         raise HTTPException(status_code=422, detail="empty transcription")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"stt failed: {e}")
+
+@router.get(
+    "/chat/sessions/{session_id}/messages",
+    summary="세션 메시지 조회(user+assistant)",
+    response_model=List[Dict[str, Any]],
+)
+def get_session_messages(
+    session_id: int,
+    offset: int = 0,
+    limit: int = 200,
+    role: Optional[Literal["user", "assistant"]] = None,
+    db: Session = Depends(get_db),
+):
+    _ensure_session(db, session_id)
+
+    rows = crud_chat.list_messages(
+        db,
+        session_id=session_id,
+        offset=offset,
+        limit=limit,
+        role=role,
+    )
+
+    # ORM → JSON-safe dict
+    return [
+        {
+            "message_id": getattr(m, "message_id", None) or getattr(m, "id", None),
+            "session_id": m.session_id,
+            "role": m.role,
+            "content": m.content,
+            "created_at": m.created_at,
+            "response_latency_ms": getattr(m, "response_latency_ms", None),
+            "extra_data": getattr(m, "extra_data", None),
+        }
+        for m in rows
+    ]
