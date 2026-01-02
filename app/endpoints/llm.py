@@ -1,4 +1,4 @@
-# APP/llm.py
+# app/endpoints/llm.py
 from __future__ import annotations
 
 from typing import Iterable, Optional, Union, Any, Dict, List, Literal
@@ -31,9 +31,10 @@ from core.pricing import (
     normalize_usage_stt,           # STT 사용량 정규화
 )
 from crud import api_cost as crud_cost
-from service.stt import _wav_duration_seconds,_ensure_wav_16k_mono,_clova_transcribe
+from service.stt import _wav_duration_seconds, _ensure_wav_16k_mono, _clova_transcribe
 from fastapi.encoders import jsonable_encoder
 from langchain_service.prompt.style import build_system_prompt
+
 try:
     from langchain_community.callbacks import get_openai_callback
 except Exception:
@@ -44,8 +45,14 @@ log = logging.getLogger("api_cost")
 router = APIRouter(prefix="/llm", tags=["LLM"])
 CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
 
+
 # 프롬프트 전체 조각 생성
-def _prompt_parts_for_estimate(question: str, context_text: str, style: Optional[str], policy_flags: Optional[dict]) -> list[str]:
+def _prompt_parts_for_estimate(
+    question: str,
+    context_text: str,
+    style: Optional[str],
+    policy_flags: Optional[dict],
+) -> list[str]:
     system_txt = build_system_prompt(style=(style or "friendly"), **(policy_flags or {}))
     rule_txt = (
         "규칙: 제공된 컨텍스트를 우선하여 답하고, 정말 관련이 없을 때만 "
@@ -59,7 +66,6 @@ def _prompt_parts_for_estimate(question: str, context_text: str, style: Optional
         "[컨텍스트 끝]",
         "질문: " + question,
     ]
-
 
 
 def _probe_duration_seconds(data: bytes) -> float:
@@ -78,9 +84,10 @@ def _probe_duration_seconds(data: bytes) -> float:
     except Exception:
         return 0.0
     finally:
-        try: os.remove(tmp.name)
-        except: pass
-
+        try:
+            os.remove(tmp.name)
+        except Exception:
+            pass
 
 
 def _ensure_session(db: Session, session_id: int) -> None:
@@ -114,13 +121,17 @@ def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
                         db, get_llm, text_to_vector,
                         knowledge_id=payload.knowledge_id, top_k=payload.top_k,
                         policy_flags=flags, style=style, streaming=True, callbacks=[cb],
+                        use_input_context=True,
                     )
                 except RuntimeError as exc:
                     raise HTTPException(status_code=503, detail=str(exc))
 
                 full = ""
                 try:
-                    for chunk in chain.stream({"question": payload.question}, config={"callbacks": [cb]}):
+                    for chunk in chain.stream(
+                        {"question": payload.question, "context": context_text},
+                        config={"callbacks": [cb]},
+                    ):
                         full += chunk
                         yield chunk
                 finally:
@@ -143,6 +154,7 @@ def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
                         )
                     except Exception as e:
                         log.exception("api-cost llm record failed: %s", e)
+
         else:
             # 콜백 불가(타사 모델 등): 프롬프트 전체 기준 추정
             try:
@@ -150,13 +162,14 @@ def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
                     db, get_llm, text_to_vector,
                     knowledge_id=payload.knowledge_id, top_k=payload.top_k,
                     policy_flags=flags, style=style, streaming=True,
+                    use_input_context=True,
                 )
             except RuntimeError as exc:
                 raise HTTPException(status_code=503, detail=str(exc))
 
             full = ""
             try:
-                for chunk in chain.stream({"question": payload.question}):
+                for chunk in chain.stream({"question": payload.question, "context": context_text}):
                     full += chunk
                     yield chunk
             finally:
@@ -175,7 +188,6 @@ def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
                     log.exception("api-cost llm record failed: %s", e)
 
     return StreamingResponse(stream_gen(), media_type="text/plain")
-
 
 
 @router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse, summary="LLM 입력창")

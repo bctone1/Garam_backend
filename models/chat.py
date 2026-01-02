@@ -68,8 +68,6 @@ class Message(Base):
         ),
         Index("idx_message_session_created", "session_id", "created_at"),
         Index("idx_message_role_created", "role", "created_at"),
-        # 선택: pg_trgm 설치 시 텍스트 검색 가속
-        # Index("idx_message_content_trgm", text("lower(content)"), postgresql_using="gin"),
     )
 
 

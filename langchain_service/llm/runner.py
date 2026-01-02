@@ -1,10 +1,11 @@
 # langchain_service/llm/runner.py
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Tuple, List
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -44,15 +45,39 @@ def _update_last_user_vector(db: Session, session_id: int, vector: Iterable[floa
     db.commit()
     db.refresh(message)
 
+def _build_sources(
+    db: Session,
+    vector: list[float],
+    knowledge_id: Optional[int],
+    top_k: int,
+) -> list[QASource]:
+    sources, _ = _retrieve_sources_and_context(
+        db,
+        vector=vector,
+        knowledge_id=knowledge_id,
+        top_k=top_k,
+    )
+    return sources
 
-def _build_sources(db: Session, vector: list[float], knowledge_id: Optional[int], top_k: int) -> list[QASource]:
+
+
+def _retrieve_sources_and_context(
+    db: Session,
+    *,
+    vector: list[float],
+    knowledge_id: Optional[int],
+    top_k: int,
+) -> Tuple[List[QASource], str]:
+    """
+    검색 1회로 sources + context_text를 같이 만든다.
+    """
     chunks = crud_knowledge.search_chunks_by_vector(
         db,
         query_vector=vector,
         knowledge_id=knowledge_id,
         top_k=top_k,
     )
-    return [
+    sources = [
         QASource(
             chunk_id=chunk.id,
             knowledge_id=chunk.knowledge_id,
@@ -62,6 +87,8 @@ def _build_sources(db: Session, vector: list[float], knowledge_id: Optional[int]
         )
         for chunk in chunks
     ]
+    context_text = ("\n\n".join(s.text for s in sources))[:MAX_CTX_CHARS]
+    return sources, context_text
 
 
 def _render_prompt_for_estimate(
@@ -113,16 +140,25 @@ def _run_qa(
             )
         style = m.response_style  # 'professional' | 'friendly' | 'concise'
 
+    # (1) 임베딩 1회
     vector = _to_vector(question)
+
     if session_id is not None:
         _update_last_user_vector(db, session_id, vector)
 
-    # 미리 검색해서 컨텍스트 확보(보정 토큰 계산 용)
-    sources = _build_sources(db, vector, knowledge_id, top_k)
-    context_text = ("\n\n".join(s.text for s in sources))[:MAX_CTX_CHARS]
+    # (2) 검색 1회 (sources + context_text 같이 확보)
+    sources, context_text = _retrieve_sources_and_context(
+        db,
+        vector=vector,
+        knowledge_id=knowledge_id,
+        top_k=top_k,
+    )
 
     provider = getattr(config, "LLM_PROVIDER", "openai").lower()
     model = getattr(config, "LLM_MODEL", getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
+
+    raw = ""
+    resp_text = ""
 
     try:
         if provider == "openai" and get_openai_callback is not None:
@@ -136,10 +172,15 @@ def _run_qa(
                     policy_flags=policy_flags or {},
                     style=style,
                     streaming=True,
-                    callbacks=[cb]
+                    callbacks=[cb],
+                    use_input_context=True,
                 )
-                # 콜백을 체인 전체에 강제 주입
-                raw = "".join(chain.stream({"question": question}, config={"callbacks": [cb]}))
+                raw = "".join(
+                    chain.stream(
+                        {"question": question, "context": context_text},
+                        config={"callbacks": [cb]},
+                    )
+                )
                 resp_text = str(raw or "")
 
                 # 프롬프트 전체(시스템/규칙/컨텍스트/라벨/질문) + 응답 토큰 추정
@@ -187,8 +228,10 @@ def _run_qa(
                 policy_flags=policy_flags or {},
                 style=style,
                 streaming=True,
+                use_input_context=True,
             )
-            raw = "".join(chain.stream({"question": question}))
+
+            raw = "".join(chain.stream({"question": question, "context": context_text}))
             resp_text = str(raw or "")
 
             prompt_parts = _render_prompt_for_estimate(

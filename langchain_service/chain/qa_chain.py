@@ -25,7 +25,8 @@ def make_qa_chain(
     max_ctx_chars: int = 12000,
     restrict_to_kb: bool = True,
     streaming: bool = False,
-    callbacks: Optional[List[Any]] = None,  # 비용 집계용 콜백
+    callbacks: Optional[List[Any]] = None,
+    use_input_context: bool = False,
 ):
     m = crud_model.get_single(db)
     if not m:
@@ -40,29 +41,46 @@ def make_qa_chain(
 
     system_txt = build_system_prompt(style=style_key, **(policy_flags or {}))
 
+    def _clip_context(ctx: Any) -> str:
+        if ctx is None:
+            return ""
+        s = str(ctx)
+        return s[:max_ctx_chars]
+
     def _retrieve(question: str) -> str:
+        # use_input_context=True면 이 함수는 호출되지 않음(=임베딩/검색 0회)
         vec = text_to_vector(question)
         chunks = search_chunks_by_vector(
-            db, query_vector=vec, knowledge_id=knowledge_id, top_k=top_k
+            db,
+            query_vector=vec,
+            knowledge_id=knowledge_id,
+            top_k=top_k,
         )
         return "\n\n".join(c.chunk_text for c in chunks)[:max_ctx_chars]
 
     retriever = RunnableLambda(_retrieve)
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_txt + "\n"
-         "규칙: 제공된 컨텍스트를 우선하여 답하고, 정말 관련이 없을 때만 "
-         "짧게 '해당내용은 찾을 수 없음'이라고 답하라."),
-        ("human",
-         "다음 컨텍스트만 근거로 답하세요.\n"
-         "[컨텍스트 시작]\n{context}\n[컨텍스트 끝]\n\n"
-         "질문: {question}")
-    ])
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                system_txt
+                + "\n"
+                + "규칙: 제공된 컨텍스트를 우선하여 답하고, 정말 관련이 없을 때만 "
+                + "짧게 '해당내용은 찾을 수 없음'이라고 답하라.",
+            ),
+            (
+                "human",
+                "다음 컨텍스트만 근거로 답하세요.\n"
+                "[컨텍스트 시작]\n{context}\n[컨텍스트 끝]\n\n"
+                "질문: {question}",
+            ),
+        ]
+    )
 
     params = llm_params(m.fast_response_mode)
     provider = getattr(config, "LLM_PROVIDER", "openai")
-    model = getattr(config, "LLM_MODEL",
-                    getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
+    model = getattr(config, "LLM_MODEL", getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
 
     llm = get_llm(
         provider=provider,
@@ -71,18 +89,25 @@ def make_qa_chain(
         streaming=streaming,
     )
 
-    # 콜백을 LLM 노드에 직접 주입 (+run_name)
     if callbacks:
         try:
             llm = llm.with_config(callbacks=callbacks, run_name="qa_llm")
         except Exception:
             pass
 
+    # context 소스 선택: runner 주입(context) vs 내부 검색(retriever)
+    if use_input_context:
+        context_runnable = itemgetter("context") | RunnableLambda(_clip_context)
+    else:
+        context_runnable = itemgetter("question") | retriever
+
     return (
-        RunnableMap({
-            "question": itemgetter("question"),
-            "context": itemgetter("question") | retriever,
-        })
+        RunnableMap(
+            {
+                "question": itemgetter("question"),
+                "context": context_runnable,
+            }
+        )
         | prompt
         | llm
         | StrOutputParser()
