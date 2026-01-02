@@ -181,7 +181,7 @@ def _retrieve_sources_and_context(
 @router.post("/qa/stream")
 def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
     # JSON 모드 기본 ON (payload에 있으면 그 값을 우선)
-    force_json_output: bool = bool(getattr(payload, "force_json_output", True))
+    force_json_output: bool = bool(getattr(payload, "force_json_output", False))
     few_shot_profile: str = str(getattr(payload, "few_shot_profile", "support_v1") or "support_v1")
 
     # 체인 생성 전 컨텍스트 확보(보정 토큰 계산용)
@@ -331,7 +331,7 @@ def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depend
         if v is not None
     }
 
-    force_json_output: bool = bool(getattr(payload, "force_json_output", True))
+    force_json_output: bool = bool(getattr(payload, "force_json_output", False))
     few_shot_profile: str = str(getattr(payload, "few_shot_profile", "support_v1") or "support_v1")
 
     crud_chat.create_message(
@@ -400,7 +400,7 @@ def ask_global(payload: QARequest, db: Session = Depends(get_db)) -> QAResponse:
         if v is not None
     }
 
-    force_json_output: bool = bool(getattr(payload, "force_json_output", True))
+    force_json_output: bool = bool(getattr(payload, "force_json_output", False))
     few_shot_profile: str = str(getattr(payload, "few_shot_profile", "support_v1") or "support_v1")
 
     session_id = getattr(payload, "session_id", None)
@@ -454,7 +454,7 @@ async def stt_qa(
             if v is not None:
                 flags[k] = v
 
-        force_json_output: bool = bool(getattr(params, "force_json_output", True))
+        force_json_output: bool = bool(getattr(params, "force_json_output", False))
         few_shot_profile: str = str(getattr(params, "few_shot_profile", "support_v1") or "support_v1")
 
         return _run_qa(
@@ -489,7 +489,7 @@ async def clova_stt(
     restrict_non_tech: Optional[bool] = Form(None),
     suggest_agent_handoff: Optional[bool] = Form(None),
     # JSON 모드 (form으로도 받게)
-    force_json_output: bool = Form(True),
+    force_json_output: bool = Form(False),
     few_shot_profile: str = Form("support_v1"),
 ):
     try:

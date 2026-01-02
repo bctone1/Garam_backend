@@ -235,7 +235,7 @@ def _run_qa(
     session_id: Optional[int] = None,
     policy_flags: Optional[dict] = None,
     style: Optional[str] = None,
-    force_json_output: bool = True,
+    force_json_output: bool = False,
     few_shot_profile: str = "support_v1",
     streaming: bool = False,
 ) -> QAResponse:
