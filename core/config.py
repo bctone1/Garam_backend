@@ -7,6 +7,35 @@ import base64
 # 0) .env 로드
 load_dotenv()
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _parse_alias_map(v: str | None) -> dict[str, str] | None:
+    """
+    ENV 예시:
+      EMBED_ALIAS_MAP="POS:포스,포스:POS,API:에이피아이"
+    """
+    if not v:
+        return None
+    out: dict[str, str] = {}
+    for part in v.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            continue
+        k, val = part.split(":", 1)
+        k = k.strip()
+        val = val.strip()
+        if k and val:
+            out[k] = val
+    return out or None
+
+
 # 1) 경로
 BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "file" / "upload"))
@@ -62,6 +91,31 @@ VECTOR_DB_CONNECTION = os.getenv(
 # 7) 임베딩·채팅·Chroma
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 CHROMA_PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", "./chroma_db")
+
+# 7-1) Upload / RAG: Parent-Child chunking
+USE_LLM_PREVIEW = _env_bool("USE_LLM_PREVIEW", False)
+
+USE_PARENT_CHILD_CHUNKING = _env_bool("USE_PARENT_CHILD_CHUNKING", True)
+
+CHILD_CHUNK_SIZE = int(os.getenv("CHILD_CHUNK_SIZE", "900"))
+CHILD_CHUNK_OVERLAP = int(os.getenv("CHILD_CHUNK_OVERLAP", "150"))
+
+PARENT_SUMMARY_MAX_CHARS = int(os.getenv("PARENT_SUMMARY_MAX_CHARS", "220"))
+
+EMBED_INCLUDE_PARENT_TITLE = _env_bool("EMBED_INCLUDE_PARENT_TITLE", True)
+EMBED_INCLUDE_ALIASES = _env_bool("EMBED_INCLUDE_ALIASES", True)
+
+# alias map (ENV로 덮어쓸 수 있음)
+EMBED_ALIAS_MAP = _parse_alias_map(os.getenv("EMBED_ALIAS_MAP")) or {
+    "POS": "포스",
+    "포스": "POS",
+}
+
+EMBEDDING_DIM = 1536
+VECTOR_DISTANCE_THRESHOLD = 0.35
+VECTOR_CANDIDATE_MULT = 5
+IVFFLAT_PROBES = 10   # lists=100이면 보통 5~20 사이에서 튜닝
+
 
 # 8) 모델 카탈로그
 OPENAI_MODELS = os.getenv("OPENAI_MODELS", "gpt-4,gpt-4o,gpt-4-turbo")

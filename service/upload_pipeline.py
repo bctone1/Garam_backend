@@ -1,5 +1,6 @@
 # services/upload_pipeline.py
 import os
+import re
 import shutil
 from uuid import uuid4
 from typing import List, Optional, Tuple
@@ -39,9 +40,116 @@ if _USE_LLM_PREVIEW:
     from service.prompt import pdf_preview_prompt  # type: ignore
 
 
+# =========================================================
+# parent-child chunking configs (safe defaults)
+# =========================================================
+_USE_PARENT_CHILD_CHUNKING = getattr(config, "USE_PARENT_CHILD_CHUNKING", True)
+
+_CHILD_CHUNK_SIZE = getattr(config, "CHILD_CHUNK_SIZE", 900)
+_CHILD_CHUNK_OVERLAP = getattr(config, "CHILD_CHUNK_OVERLAP", 150)
+_PARENT_SUMMARY_MAX_CHARS = getattr(config, "PARENT_SUMMARY_MAX_CHARS", 220)
+
+# 임베딩 입력에 parent title을 아주 짧게 섞어서 키워드/약어 매칭 보강
+_EMBED_INCLUDE_PARENT_TITLE = getattr(config, "EMBED_INCLUDE_PARENT_TITLE", True)
+
+# 아주 가벼운 alias 확장(예: POS <-> 포스)
+_EMBED_INCLUDE_ALIASES = getattr(config, "EMBED_INCLUDE_ALIASES", True)
+# 프로젝트 config에 dict로 덮어쓸 수 있음
+_EXTRA_ALIAS_MAP = getattr(config, "EMBED_ALIAS_MAP", None)
+
+_DEFAULT_ALIAS_MAP = {
+    "POS": "포스",
+    "포스": "POS",
+}
+
+_PARENT_PREFIX = "[PARENT]"
+_CHILD_PREFIX = "[CHILD]"
+
+
 def _tok_len(s: str) -> int:
     model = getattr(config, "DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small")
     return tokens_for_texts(model, [s])
+
+
+def _norm_line(s: str) -> str:
+    # PDF 추출 텍스트는 공백이 난잡한 경우가 많아서 normalize
+    return " ".join((s or "").strip().split())
+
+
+def _is_heading(line: str) -> bool:
+    """
+    헤더(Parent) 라인 추정 휴리스틱.
+    - #/## 같은 마크다운 스타일
+    - 1. / 1) / (1) 같은 섹션 표기
+    - 짧고(<= 50) 문장부호가 적고, 특정 키워드로 끝나면 헤더로 간주
+    """
+    ln = _norm_line(line)
+    if not ln:
+        return False
+
+    # markdown heading
+    if ln.startswith("#"):
+        return True
+
+    # numbered headings
+    if re.match(r"^(\(?\d+(\.\d+)*\)?[\.\)])\s+\S+", ln):
+        return True
+
+    # very short / title-ish lines
+    if len(ln) <= 50:
+        # 너무 문장 같은 건 제외(마침표/물음표/느낌표가 많으면 문장)
+        if sum(ch in ln for ch in ".?!") >= 1:
+            return False
+        # 흔한 문서 헤더 키워드
+        keywords = ("설정", "오류", "방법", "주의", "개요", "원인", "해결", "FAQ", "가이드", "정의", "예시")
+        if ln.endswith(keywords):
+            return True
+        # 대문자 약어 중심(예: POS, API, DB 등)
+        if re.search(r"\b[A-Z]{2,}\b", ln):
+            return True
+
+    return False
+
+
+def _make_parent_summary(body: str, max_chars: int) -> str:
+    lines = [ _norm_line(x) for x in (body or "").splitlines() if _norm_line(x) ]
+    if not lines:
+        return ""
+    # 앞 2~3줄 정도를 요약처럼 사용
+    head = " ".join(lines[:3]).strip()
+    if len(head) > max_chars:
+        return head[:max_chars]
+    return head
+
+
+def _alias_map() -> dict:
+    m = dict(_DEFAULT_ALIAS_MAP)
+    if isinstance(_EXTRA_ALIAS_MAP, dict):
+        for k, v in _EXTRA_ALIAS_MAP.items():
+            if isinstance(k, str) and isinstance(v, str) and k and v:
+                m[k] = v
+    return m
+
+
+def _aliases_for_title(title: str) -> List[str]:
+    """
+    title에서 alias를 얇게 추가해주는 용도.
+    예: "POS 설정"이면 "포스"를 같이 넣어준다.
+    """
+    t = title or ""
+    amap = _alias_map()
+    out: List[str] = []
+    for k, v in amap.items():
+        if k in t and v not in t:
+            out.append(v)
+    # 중복 제거(입력 순서 유지)
+    seen = set()
+    uniq: List[str] = []
+    for x in out:
+        if x not in seen:
+            seen.add(x)
+            uniq.append(x)
+    return uniq
 
 
 class UploadPipeline:
@@ -124,17 +232,98 @@ class UploadPipeline:
         ]
         crud.bulk_create_pages(self.db, knowledge_id, pages)
 
-    # 7) 청크
+    # 7) (기존) 일반 청킹
     def chunk_text(self, text: str) -> List[str]:
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=900,
-            chunk_overlap=150,
+            chunk_size=800,
+            chunk_overlap=200,
             length_function=_tok_len,
             separators=["\n\n", "\n", " ", ""],
         )
         return splitter.split_text(text)
 
-    # 8) 임베딩
+    # 7-2) parent-child 청킹: store_text(parent+child) / embed_text(child 중심)
+    def chunk_parent_child(self, text: str, *, default_title: str = "문서") -> List[Tuple[str, str]]:
+        """
+        returns: List[(store_text, embed_text)]
+        - store_text: parent(title/summary) + child (컨텍스트용)
+        - embed_text: 검색/임베딩용(기본 child, 옵션 title/alias 살짝)
+        """
+        raw_lines = text.splitlines() if text else []
+        lines = [_norm_line(ln) for ln in raw_lines]
+        lines = [ln for ln in lines if ln]  # 빈 줄 제거(너무 과하게는 제거하지 않음)
+
+        if not lines:
+            return []
+
+        # 섹션 분리
+        sections: List[Tuple[str, str]] = []
+        cur_title = default_title or "문서"
+        cur_body: List[str] = []
+
+        for ln in lines:
+            if _is_heading(ln):
+                # 이전 섹션 flush
+                if cur_body:
+                    sections.append((cur_title, "\n".join(cur_body).strip()))
+                # 새 섹션 시작
+                t = ln.lstrip("#").strip()
+                cur_title = t or default_title or "문서"
+                cur_body = []
+            else:
+                cur_body.append(ln)
+
+        if cur_body:
+            sections.append((cur_title, "\n".join(cur_body).strip()))
+
+        if not sections:
+            sections = [(default_title or "문서", "\n".join(lines).strip())]
+
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=_CHILD_CHUNK_SIZE,
+            chunk_overlap=_CHILD_CHUNK_OVERLAP,
+            length_function=_tok_len,
+            separators=["\n\n", "\n", " ", ""],
+        )
+
+        pairs: List[Tuple[str, str]] = []
+        for title, body in sections:
+            title = _norm_line(title) or (default_title or "문서")
+            summary = _make_parent_summary(body, _PARENT_SUMMARY_MAX_CHARS)
+
+            # body가 너무 비면 title/summary만으로 child를 만들지 않고 skip
+            if not (body and body.strip()):
+                continue
+
+            child_chunks = splitter.split_text(body)
+            for child in child_chunks:
+                c = (child or "").strip()
+                if not c:
+                    continue
+
+                store_text = (
+                    f"{_PARENT_PREFIX}\n"
+                    f"{title}\n"
+                    f"{summary}\n\n"
+                    f"{_CHILD_PREFIX}\n"
+                    f"{c}"
+                ).strip()
+
+                # 임베딩 텍스트(검색용): child 중심 + (옵션) title/alias 조금
+                embed_text = c
+                if _EMBED_INCLUDE_PARENT_TITLE:
+                    aliases = _aliases_for_title(title) if _EMBED_INCLUDE_ALIASES else []
+                    if aliases:
+                        alias_line = " / ".join(aliases)
+                        embed_text = f"{title}\n{alias_line}\n{c}"
+                    else:
+                        embed_text = f"{title}\n{c}"
+
+                pairs.append((store_text, embed_text))
+
+        return pairs
+
+    # 8) (기존) 임베딩
     def embed_chunks(self, chunks: List[str]) -> Tuple[List[str], List[List[float]]]:
         cleaned = [c for c in chunks if c and c.strip()]
         if not cleaned:
@@ -148,6 +337,43 @@ class UploadPipeline:
                 for v in ex.map(text_to_vector, cleaned):
                     vecs.append(v)
         return cleaned, vecs
+
+    # 8-2) parent-child pair 임베딩: store_text와 벡터를 정렬된 상태로 반환
+    def embed_parent_child_pairs(self, pairs: List[Tuple[str, str]]) -> Tuple[List[str], List[List[float]], int]:
+        """
+        returns:
+        - store_texts: DB 저장용 (parent+child)
+        - vectors: embed_text들에 대한 벡터
+        - total_tokens: embed_text 기준 토큰 합(비용 집계용)
+        """
+        cleaned_store: List[str] = []
+        embed_inputs: List[str] = []
+
+        for store_text, embed_text in pairs:
+            st = (store_text or "").strip()
+            et = (embed_text or "").strip()
+            if not et:
+                continue
+            if not st:
+                # store_text는 비어있으면 의미가 없으니 같이 제거
+                continue
+            cleaned_store.append(st)
+            embed_inputs.append(et)
+
+        if not embed_inputs:
+            return [], [], 0
+
+        if _HAS_BATCH:
+            vecs = text_list_to_vectors(embed_inputs)  # type: ignore
+        else:
+            vecs: List[List[float]] = []
+            max_workers = min(4, (os.cpu_count() or 4))
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                for v in ex.map(text_to_vector, embed_inputs):
+                    vecs.append(v)
+
+        total_tokens = sum(_tok_len(et) for et in embed_inputs)
+        return cleaned_store, vecs, total_tokens
 
     # 9) 청크 저장
     def store_chunks(self, knowledge_id: int, chunks: List[str], vectors: List[List[float]]):
@@ -171,15 +397,24 @@ class UploadPipeline:
 
             self.store_pages(know.id, num_pages)
 
-            chunks = self.chunk_text(text)
-            chunks, vectors = self.embed_chunks(chunks)
-            if vectors:
-                self.store_chunks(know.id, chunks, vectors)
+            total_tokens_for_cost = 0
 
-                # ==== 비용 집계: 임베딩 ====
+            if _USE_PARENT_CHILD_CHUNKING:
+                pairs = self.chunk_parent_child(text, default_title=(file.filename or "문서"))
+                store_texts, vectors, total_tokens_for_cost = self.embed_parent_child_pairs(pairs)
+                if vectors:
+                    self.store_chunks(know.id, store_texts, vectors)
+            else:
+                chunks = self.chunk_text(text)
+                chunks, vectors = self.embed_chunks(chunks)
+                if vectors:
+                    self.store_chunks(know.id, chunks, vectors)
+                    total_tokens_for_cost = sum(_tok_len(c or "") for c in chunks)
+
+            # ==== 비용 집계: 임베딩 ====
+            if total_tokens_for_cost > 0:
                 try:
-                    total_tokens = sum(_tok_len(c or "") for c in chunks)
-                    usage = normalize_usage_embedding(total_tokens)
+                    usage = normalize_usage_embedding(total_tokens_for_cost)
                     usd = estimate_embedding_cost_usd(
                         model=getattr(config, "DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small"),
                         total_tokens=usage["embedding_tokens"],
