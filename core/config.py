@@ -123,7 +123,7 @@ CLAUDE_MODELS = os.getenv("CLAUDE_MODELS", "")
 ANTHROPIC_MODELS = os.getenv("ANTHROPIC_MODELS", "")
 GOOGLE_MODELS = os.getenv("GOOGLE_MODELS", "")
 FRIENDLI_MODELS = os.getenv("FRIENDLI_MODELS", "")
-DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "gpt-4o-mini")
+DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "gpt-4o")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 LLM_MODEL    = os.getenv("LLM_MODEL", DEFAULT_CHAT_MODEL)
 
@@ -164,7 +164,7 @@ TOKEN_UNIT = 1000
 LLM_TOKEN_MODE = "merged"
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
-DEFAULT_LLM_MODEL = "gpt-4o-mini"
+DEFAULT_LLM_MODEL = "gpt-4o-"
 DEFAULT_STT_MODEL = "CLOVA_STT"
 
 # CLOVA STT 과금 규칙

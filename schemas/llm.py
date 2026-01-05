@@ -28,6 +28,7 @@ class ChatQARequest(PolicyFlags):
     knowledge_id: Optional[int] = Field(default=None, ge=1)
     top_k: int = Field(default=5, ge=1, le=50)
     style: Optional[StyleLiteral] = None
+    few_shot_profile: Optional[str] = None
 
 
 class QARequest(PolicyFlags):

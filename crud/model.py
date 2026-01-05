@@ -1,4 +1,4 @@
-# CRUD
+# CRUD/model.py
 from typing import Optional, Dict, Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,7 +7,6 @@ from models.model import Model
 SINGLE_ID = 1
 
 def get_single(db: Session) -> Optional[Model]:
-    # stmt 는 statement, 모델은 우선 1개만 하기로 함
     stmt = select(Model).where(Model.id == SINGLE_ID)
     return db.execute(stmt).scalar_one_or_none()
 

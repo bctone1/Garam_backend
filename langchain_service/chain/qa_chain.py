@@ -1,7 +1,6 @@
 # langchain_service/chain/qa_chain.py
 from __future__ import annotations
 
-import json
 from operator import itemgetter
 from typing import Optional, Callable, List, Any
 
@@ -32,8 +31,7 @@ def make_qa_chain(
     streaming: bool = False,
     callbacks: Optional[List[Any]] = None,
     use_input_context: bool = False,
-    force_json_output: bool = True,
-    few_shot_profile: str = "support_v1",  # 없으면 자동 fallback
+    few_shot_profile: str = "support_md",
 ):
     m = crud_model.get_single(db)
     if not m:
@@ -46,11 +44,38 @@ def make_qa_chain(
 
     system_txt = build_system_prompt(style=style_key, **(policy_flags or {}))
 
+    # 출력 형식 지침
+    system_txt = (
+        system_txt
+        + "\n\n추가 지침:\n"
+        + "- 답변은 마크다운으로 작성해. (굵게(**), 목록(-), 번호(1.) 사용 가능)\n"
+        + "- 코드블록은 절대 사용하지 마. (``` 또는 ```json 포함 전부 금지)\n"
+        + "- JSON만 출력하는 형식은 금지야. 일반 문장 + 목록 형태로 답해.\n"
+        + "- 제공된 컨텍스트에 근거해서만 답해.\n"
+        + "- 컨텍스트 근거가 부족하면 '없음'으로 끝내지 말고, 필요한 정보를 물어보는 확인 질문(clarify)으로 전환해.\n"
+        + "- force_clarify가 True면 답변 대신 확인 질문만 해.\n"
+    )
+
+    # ✅ few-shot 로드(없으면 조용히 스킵)
+    profile = None
+    for cand in [few_shot_profile, "support_v1"]:
+        try:
+            profile = load_few_shot_profile(cand)
+            break
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
+
+    fs_msgs: list[tuple[str, str]] = []
+    if profile:
+        # rules는 JSON 전용일 수 있어서 여기서는 강제 적용하지 않고 examples만 사용
+        fs_msgs = few_shot_messages(profile) or []
+
     def _clip_context(ctx: Any) -> str:
         if ctx is None:
             return ""
-        s = str(ctx)
-        return s[:max_ctx_chars]
+        return str(ctx)[:max_ctx_chars]
 
     def _retrieve(question: str) -> str:
         # use_input_context=True면 이 함수는 호출되지 않음(=임베딩/검색 0회)
@@ -62,11 +87,10 @@ def make_qa_chain(
             top_k=top_k,
             query_text=question,
         )
-        return "\n\n".join(getattr(c, "chunk_text", "") for c in chunks)[:max_ctx_chars]
+        return "\n\n".join((getattr(c, "chunk_text", "") or "") for c in chunks)[:max_ctx_chars]
 
     def _has_specific_markers(q: str) -> bool:
         ql = q.lower()
-        # 숫자/규격/모델/질문 의도(어디서/어떻게/방법 등) 들어가면 "구체적"으로 간주
         if any(ch.isdigit() for ch in q):
             return True
         specific = [
@@ -81,14 +105,11 @@ def make_qa_chain(
         q = (question or "").strip()
         ctx = (context or "").strip()
 
-        # 컨텍스트가 거의 없으면(검색 실패/저품질) -> clarify 우선
         if len(ctx) < 40:
             return True
-
         if not q:
             return True
 
-        # 아주 짧고(또는 단어 수 적고) 구체 마커 없으면 -> clarify
         wc = len(q.split())
         if not _has_specific_markers(q):
             if len(q) <= 6:
@@ -96,42 +117,11 @@ def make_qa_chain(
             if wc <= 2 and len(q) <= 12:
                 return True
 
-            # 다의어/범용어 + 짧은 질의는 clarify
             ambiguous = ["주문", "접수", "설정", "문의", "문제", "안됨", "안돼", "안되", "오류", "에러"]
             if any(a in q for a in ambiguous) and wc <= 3:
                 return True
 
         return False
-
-    # === few-shot profile 로드 (파일명 오타/버전 대비 fallback) ===
-    profile = None
-    if force_json_output:
-        for name in [few_shot_profile, "support_v1", "support_v1"]:
-            try:
-                profile = load_few_shot_profile(name)
-                break
-            except FileNotFoundError:
-                continue
-
-    json_contract_block = ""
-    fs_msgs: list[tuple[str, str]] = []
-    if force_json_output and profile:
-        contract = profile.get("output_contract") or {}
-        rules = profile.get("rules") or []
-
-        json_contract_block = (
-                "\n\n"
-                "IMPORTANT: You must respond with a single valid json object only.\n"
-                "반드시 **유효한 json 객체 하나만** 출력해. (코드블록/마크다운/설명 문장 금지)\n"
-                "출력 계약(schema 비슷한 형태):\n"
-                f"{json.dumps(contract, ensure_ascii=False, indent=2)}\n\n"
-                "규칙:\n- " + "\n- ".join(rules) + "\n\n"
-                 "추가 규칙:\n"
-                 "- force_clarify=true이면 반드시 type=clarify로만 응답\n"
-                 "- answer는 제공된 컨텍스트에 근거해서만 작성\n"
-                 "- 컨텍스트 근거가 부족하면 '없음'이라고 끝내지 말고 clarify로 전환\n"
-        )
-        fs_msgs = few_shot_messages(profile)
 
     retriever = RunnableLambda(_retrieve)
 
@@ -155,21 +145,18 @@ def make_qa_chain(
         }
     )
 
-    # === prompt: system + few-shot + human ===
-    messages: list[tuple[str, str]] = [
-        ("system", system_txt + json_contract_block),
-    ]
+    messages: list[tuple[str, str]] = [("system", system_txt)]
     if fs_msgs:
         messages.extend(fs_msgs)
 
     messages.append(
         (
             "human",
-            "Return only valid json.\n"
             "다음 컨텍스트를 참고해.\n"
             "[컨텍스트 시작]\n{context}\n[컨텍스트 끝]\n\n"
             "질문: {question}\n"
-            "force_clarify: {force_clarify}\n",
+            "force_clarify: {force_clarify}\n\n"
+            "출력 규칙: 마크다운 OK / 코드블록( ``` ) 금지 / JSON-only 금지\n",
         )
     )
 
@@ -179,32 +166,14 @@ def make_qa_chain(
     params = llm_params(m.fast_response_mode)
     provider = getattr(config, "LLM_PROVIDER", "openai")
     model = getattr(config, "LLM_MODEL", getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
+    temperature = params.get("temperature", 0.7)
 
-    # JSON 출력 안정성 위해 temperature 낮추기
-    temperature = 0.0 if force_json_output else params.get("temperature", 0.7)
-
-    # OpenAI면 가능하면 JSON mode(지원 안 하면 무시)
-    llm_kwargs = {}
-    if force_json_output and str(provider).lower() == "openai":
-        # ChatOpenAI는 보통 model_kwargs로 response_format 전달 가능
-        llm_kwargs["model_kwargs"] = {"response_format": {"type": "json_object"}}
-
-    try:
-        llm = get_llm(
-            provider=provider,
-            model=model,
-            temperature=temperature,
-            streaming=streaming,
-            **llm_kwargs,
-        )
-    except TypeError:
-        # get_llm이 model_kwargs를 안 받는 경우 fallback
-        llm = get_llm(
-            provider=provider,
-            model=model,
-            temperature=temperature,
-            streaming=streaming,
-        )
+    llm = get_llm(
+        provider=provider,
+        model=model,
+        temperature=temperature,
+        streaming=streaming,
+    )
 
     if callbacks:
         try:
