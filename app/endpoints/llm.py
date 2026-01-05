@@ -1,60 +1,35 @@
 # app/endpoints/llm.py
 from __future__ import annotations
 
-from typing import Optional, Union, Any, Dict, List, Literal
-import os
-import tempfile
-import subprocess
 import logging
+import os
+import subprocess
+import tempfile
 import time
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
-from database.session import get_db
-from crud import chat as crud_chat
-from crud import api_cost as crud_cost
-
 from core import config
-from core.pricing import (
-    tokens_for_texts,
-    estimate_llm_cost_usd,
-    ClovaSttUsageEvent,
-    estimate_clova_stt,
-    normalize_usage_stt,
-)
-
-from schemas.llm import ChatQARequest, QARequest, QAResponse, STTResponse, STTQAParams
-
-from langchain_service.chain.qa_chain import make_qa_chain
-from langchain_service.embedding.get_vector import text_to_vector, _to_vector
-from langchain_service.llm.setup import get_llm
+from core.pricing import ClovaSttUsageEvent, estimate_clova_stt, normalize_usage_stt
+from crud import api_cost as crud_cost
+from crud import chat as crud_chat
+from database.session import get_db
 from langchain_service.llm.runner import _run_qa
-from langchain_service.prompt.style import build_system_prompt
-
-from service.knowledge_retrieval import retrieve_topk_hybrid
-from service.stt import transcribe_bytes
-from service.stt import _wav_duration_seconds, _ensure_wav_16k_mono, _clova_transcribe
-
-try:
-    from langchain_community.callbacks import get_openai_callback
-except Exception:
-    get_openai_callback = None
+from schemas.llm import ChatQARequest, QAResponse, STTResponse
+from service.stt import _clova_transcribe, _ensure_wav_16k_mono, _wav_duration_seconds
 
 log = logging.getLogger("api_cost")
 
 router = APIRouter(prefix="/llm", tags=["LLM"])
-CLOVA_STT_URL = os.getenv("CLOVA_STT_URL")
-
-MAX_CTX_CHARS = 12000
 
 
 def _probe_duration_seconds(data: bytes) -> float:
-    """ffprobe로 비-WAV 파일 길이 추출"""
+    """ffprobe로 비-WAV 파일 길이 추출 (실패 시 0.0)."""
     tmp_name: Optional[str] = None
     try:
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
@@ -76,6 +51,7 @@ def _probe_duration_seconds(data: bytes) -> float:
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
         secs = float((result.stdout or "").strip() or "0")
         return max(0.0, secs)
@@ -94,197 +70,26 @@ def _ensure_session(db: Session, session_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
 
 
-def _prompt_parts_for_estimate(
-    *,
-    question: str,
-    context_text: str,
-    style: Optional[str],
-    policy_flags: Optional[dict],
-) -> list[str]:
-    """
-    스트리밍 비용 추정용: system + 컨텍스트 + 질문
-    (JSON 계약/룰/예시는 제거)
-    """
-    system_txt = build_system_prompt(style=(style or "friendly"), **(policy_flags or {}))
-    return [
-        system_txt,
-        "다음 컨텍스트를 참고해.",
-        "[컨텍스트 시작]",
-        context_text,
-        "[컨텍스트 끝]",
-        "질문: " + question,
-        "force_clarify: False",
-    ]
-
-
-def _retrieve_sources_and_context(
-    db: Session,
-    *,
-    vector: list[float],
-    knowledge_id: Optional[int],
-    top_k: int,
-    question: str,
-) -> tuple[list[str], str]:
-    """
-    스트리밍 엔드포인트용(간단): sources(text 리스트) + context_text
-    """
-    chunks = retrieve_topk_hybrid(
-        db,
-        query_vector=vector,
-        knowledge_id=knowledge_id,
-        top_k=top_k,
-        query_text=question,
-    )
-    texts = [getattr(c, "chunk_text", "") or "" for c in chunks]
-    context_text = ("\n\n".join(texts))[:MAX_CTX_CHARS]
-    return texts, context_text
-
-
-@router.post("/qa/stream")
-def ask_stream(payload: QARequest, db: Session = Depends(get_db)):
-    """
-    스트리밍 답변: 자연어 텍스트 조각을 그대로 흘려보냄.
-    """
-    # 체인 생성 전 컨텍스트 확보(비용 추정용)
-    try:
-        vec = _to_vector(payload.question)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail="임베딩 생성에 실패했습니다.") from exc
-
-    _, context_text = _retrieve_sources_and_context(
-        db,
-        vector=vec,
-        knowledge_id=payload.knowledge_id,
-        top_k=payload.top_k,
-        question=payload.question,
-    )
-
-    provider = getattr(config, "LLM_PROVIDER", "openai").lower()
-    model = getattr(config, "LLM_MODEL", getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o"))
-    style = payload.style or "friendly"
+def _extract_policy_flags(obj: Any) -> dict:
     flags: dict = {}
-    few_shot_profile: str = str(getattr(payload, "few_shot_profile", None) or "support_md")
-
-    def stream_gen():
-        if provider == "openai" and get_openai_callback is not None:
-            with get_openai_callback() as cb:
-                try:
-                    chain = make_qa_chain(
-                        db,
-                        get_llm,
-                        text_to_vector,
-                        knowledge_id=payload.knowledge_id,
-                        top_k=payload.top_k,
-                        policy_flags=flags,
-                        style=style,
-                        streaming=True,
-                        callbacks=[cb],
-                        use_input_context=True,
-                        few_shot_profile=few_shot_profile,
-                    )
-                except RuntimeError as exc:
-                    raise HTTPException(status_code=503, detail=str(exc))
-
-                full = ""
-                try:
-                    for chunk in chain.stream(
-                        {"question": payload.question, "context": context_text},
-                        config={"callbacks": [cb]},
-                    ):
-                        full += chunk
-                        yield chunk
-                finally:
-                    try:
-                        prompt_parts = _prompt_parts_for_estimate(
-                            question=payload.question,
-                            context_text=context_text,
-                            style=style,
-                            policy_flags=flags,
-                        )
-                        est_tokens = tokens_for_texts(model, prompt_parts + [full])
-                        cb_total = int(getattr(cb, "total_tokens", 0) or 0)
-                        total = max(cb_total, est_tokens)
-
-                        usd_cb = Decimal(str(getattr(cb, "total_cost", 0.0) or 0.0))
-                        usd_est = estimate_llm_cost_usd(model=model, total_tokens=total)
-                        usd = max(usd_cb, usd_est)
-
-                        crud_cost.add_event(
-                            db,
-                            ts_utc=datetime.now(timezone.utc),
-                            product="llm",
-                            model=model,
-                            llm_tokens=total,
-                            embedding_tokens=0,
-                            audio_seconds=0,
-                            cost_usd=usd,
-                        )
-                    except Exception as e:
-                        log.exception("api-cost llm record failed: %s", e)
-        else:
-            try:
-                chain = make_qa_chain(
-                    db,
-                    get_llm,
-                    text_to_vector,
-                    knowledge_id=payload.knowledge_id,
-                    top_k=payload.top_k,
-                    policy_flags=flags,
-                    style=style,
-                    streaming=True,
-                    use_input_context=True,
-                )
-            except RuntimeError as exc:
-                raise HTTPException(status_code=503, detail=str(exc))
-
-            full = ""
-            try:
-                for chunk in chain.stream({"question": payload.question, "context": context_text}):
-                    full += chunk
-                    yield chunk
-            finally:
-                try:
-                    prompt_parts = _prompt_parts_for_estimate(
-                        question=payload.question,
-                        context_text=context_text,
-                        style=style,
-                        policy_flags=flags,
-                    )
-                    total = tokens_for_texts(model, prompt_parts + [full])
-                    usd = estimate_llm_cost_usd(model=model, total_tokens=total)
-                    crud_cost.add_event(
-                        db,
-                        ts_utc=datetime.now(timezone.utc),
-                        product="llm",
-                        model=model,
-                        llm_tokens=total,
-                        embedding_tokens=0,
-                        audio_seconds=0,
-                        cost_usd=usd,
-                    )
-                except Exception as e:
-                    log.exception("api-cost llm record failed: %s", e)
-
-    return StreamingResponse(stream_gen(), media_type="text/plain")
+    for k in ("block_inappropriate", "restrict_non_tech", "suggest_agent_handoff"):
+        v = getattr(obj, k, None)
+        if v is not None:
+            flags[k] = v
+    return flags
 
 
 @router.post("/chat/sessions/{session_id}/qa", response_model=QAResponse, summary="LLM 입력창")
 def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depends(get_db)) -> QAResponse:
     _ensure_session(db, session_id)
-    few_shot_profile: str = str(getattr(payload, "few_shot_profile", None) or "support_md")
+
     if getattr(payload, "role", "user") != "user":
         raise HTTPException(status_code=400, detail="role must be 'user'")
 
-    flags = {
-        k: v
-        for k, v in {
-            "block_inappropriate": getattr(payload, "block_inappropriate", None),
-            "restrict_non_tech": getattr(payload, "restrict_non_tech", None),
-            "suggest_agent_handoff": getattr(payload, "suggest_agent_handoff", None),
-        }.items()
-        if v is not None
-    }
+    few_shot_profile: str = str(getattr(payload, "few_shot_profile", None) or "support_md")
+    flags = _extract_policy_flags(payload)
 
+    # user message 기록
     crud_chat.create_message(
         db,
         session_id=session_id,
@@ -298,6 +103,7 @@ def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depend
             "style": payload.style,
             "policy_flags": flags,
             "few_shot_profile": few_shot_profile,
+            "source": "text",
         },
     )
 
@@ -317,11 +123,19 @@ def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depend
     if resp is None:
         raise HTTPException(status_code=502, detail="_run_qa returned None")
 
+    sources_dump = []
+    for s in (getattr(resp, "sources", None) or []):
+        if hasattr(s, "model_dump"):
+            sources_dump.append(s.model_dump())
+        else:
+            sources_dump.append(jsonable_encoder(s))
+
+    # assistant message 기록
     crud_chat.create_message(
         db,
         session_id=session_id,
         role="assistant",
-        content=resp.answer,  # 자연어 텍스트
+        content=resp.answer,
         vector_memory=None,
         response_latency_ms=latency_ms,
         extra_data=jsonable_encoder(
@@ -330,7 +144,8 @@ def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depend
                 "top_k": payload.top_k,
                 "style": payload.style,
                 "policy_flags": flags,
-                "sources": [s.model_dump() for s in (resp.sources or [])],
+                "sources": sources_dump,
+                "source": "text",
             }
         ),
     )
@@ -338,95 +153,6 @@ def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depend
     return resp
 
 
-@router.post("/qa", response_model=QAResponse)
-def ask_global(payload: QARequest, db: Session = Depends(get_db)) -> QAResponse:
-    flags = {
-        k: v
-        for k, v in {
-            "block_inappropriate": getattr(payload, "block_inappropriate", None),
-            "restrict_non_tech": getattr(payload, "restrict_non_tech", None),
-            "suggest_agent_handoff": getattr(payload, "suggest_agent_handoff", None),
-        }.items()
-        if v is not None
-    }
-    few_shot_profile: str = str(getattr(payload, "few_shot_profile", None) or "support_md")
-    session_id = getattr(payload, "session_id", None)
-    if session_id is not None:
-        _ensure_session(db, session_id)
-
-    resp = _run_qa(
-        db,
-        question=payload.question,
-        knowledge_id=payload.knowledge_id,
-        top_k=payload.top_k,
-        session_id=session_id,
-        policy_flags=flags,
-        style=payload.style,
-        few_shot_profile=few_shot_profile,
-    )
-
-    if resp is None:
-        raise HTTPException(status_code=502, detail="_run_qa returned None")
-
-    return resp
-
-
-@router.post("/qa/query", response_model=QAResponse)
-def ask_global_alias(payload: QARequest, db: Session = Depends(get_db)) -> QAResponse:
-    return ask_global(payload, db)
-
-
-# ===== STT =====
-@router.post("/stt", response_model=STTResponse)
-async def stt(file: UploadFile = File(...), lang: str = Form("ko-KR")):
-    try:
-        text = transcribe_bytes(await file.read(), file.content_type or "", lang)
-        return STTResponse(text=text)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="empty transcription")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"stt failed: {e}")
-
-
-@router.post("/stt_qa", response_model=QAResponse)
-async def stt_qa(
-    file: UploadFile = File(...),
-    params: STTQAParams = Depends(STTQAParams.as_form),
-    db: Session = Depends(get_db),
-):
-    try:
-        text = transcribe_bytes(await file.read(), file.content_type or "", params.lang).strip()
-        if not text:
-            raise ValueError("empty transcription")
-
-        flags = {}
-        for k in ("block_inappropriate", "restrict_non_tech", "suggest_agent_handoff"):
-            v = getattr(params, k, None)
-            if v is not None:
-                flags[k] = v
-
-        resp = _run_qa(
-            db,
-            question=text,
-            knowledge_id=params.knowledge_id,
-            top_k=params.top_k,
-            session_id=params.session_id,
-            policy_flags=flags,
-            style=params.style,
-        )
-
-        if resp is None:
-            raise HTTPException(status_code=502, detail="_run_qa returned None")
-
-        return resp
-
-    except ValueError:
-        raise HTTPException(status_code=422, detail="empty transcription")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"stt failed: {e}")
-
-
-# ===== Clova STT =====
 @router.post("/clova_stt", response_model=Union[STTResponse, QAResponse])
 async def clova_stt(
     file: UploadFile = File(...),
@@ -490,6 +216,9 @@ async def clova_stt(
         if not qa_mode:
             return STTResponse(text=text)
 
+        if session_id is not None:
+            _ensure_session(db, session_id)
+
         flags = {
             k: v
             for k, v in {
@@ -500,6 +229,26 @@ async def clova_stt(
             if v is not None
         }
 
+        if session_id is not None:
+            crud_chat.create_message(
+                db,
+                session_id=session_id,
+                role="user",
+                content=text,
+                vector_memory=None,
+                response_latency_ms=None,
+                extra_data={
+                    "knowledge_id": knowledge_id,
+                    "top_k": top_k,
+                    "style": style,
+                    "policy_flags": flags,
+                    "few_shot_profile": few_shot_profile,
+                    "source": "voice",
+                    "lang": lang,
+                },
+            )
+
+        t0 = time.perf_counter()
         resp = _run_qa(
             db,
             question=text,
@@ -508,17 +257,49 @@ async def clova_stt(
             session_id=session_id,
             policy_flags=flags,
             style=style,
+            few_shot_profile=few_shot_profile,
         )
+        latency_ms = int((time.perf_counter() - t0) * 1000)
 
         if resp is None:
             raise HTTPException(status_code=502, detail="_run_qa returned None")
+
+        if session_id is not None:
+            sources_dump = []
+            for s in (getattr(resp, "sources", None) or []):
+                if hasattr(s, "model_dump"):
+                    sources_dump.append(s.model_dump())
+                else:
+                    sources_dump.append(jsonable_encoder(s))
+
+            crud_chat.create_message(
+                db,
+                session_id=session_id,
+                role="assistant",
+                content=resp.answer,
+                vector_memory=None,
+                response_latency_ms=latency_ms,
+                extra_data=jsonable_encoder(
+                    {
+                        "knowledge_id": knowledge_id,
+                        "top_k": top_k,
+                        "style": style,
+                        "policy_flags": flags,
+                        "sources": sources_dump,
+                        "source": "voice",
+                        "lang": lang,
+                    }
+                ),
+            )
 
         return resp
 
     except ValueError:
         raise HTTPException(status_code=422, detail="empty transcription")
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"stt failed: {e}")
+        raise HTTPException(status_code=500, detail=f"clova_stt failed: {e}")
 
 
 @router.get(
