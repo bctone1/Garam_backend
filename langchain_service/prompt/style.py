@@ -34,7 +34,7 @@ def build_system_prompt(style: Style, **flags) -> str:
         "suggest_agent_handoff": _as_bool(flags.get("suggest_agent_handoff"), True),
     }
     return "\n".join([
-        "너의 역할: knowledge 기반 RAG 응답 엔진.",
+        "너의 역할: knowledge 기반 RAG 응답 엔진.항상 존댓말 사용",
         STYLE_MAP.get(style, STYLE_MAP["friendly"]),
         policy_text(**flags),
     ])

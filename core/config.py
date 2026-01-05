@@ -118,12 +118,12 @@ IVFFLAT_PROBES = 10   # lists=100이면 보통 5~20 사이에서 튜닝
 
 
 # 8) 모델 카탈로그
-OPENAI_MODELS = os.getenv("OPENAI_MODELS", "gpt-4,gpt-4o,gpt-4-turbo")
+OPENAI_MODELS = os.getenv("OPENAI_MODELS", "gpt-4-mini,gpt-4o,gpt-4-turbo")
 CLAUDE_MODELS = os.getenv("CLAUDE_MODELS", "")
 ANTHROPIC_MODELS = os.getenv("ANTHROPIC_MODELS", "")
 GOOGLE_MODELS = os.getenv("GOOGLE_MODELS", "")
 FRIENDLI_MODELS = os.getenv("FRIENDLI_MODELS", "")
-DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "gpt-4o")
+DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "gpt-4o-mini")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 LLM_MODEL    = os.getenv("LLM_MODEL", DEFAULT_CHAT_MODEL)
 

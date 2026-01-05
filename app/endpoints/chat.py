@@ -196,3 +196,4 @@ def session_summary(session_id: int, db: Session = Depends(get_db)):
     if not crud.get_session(db, session_id):
         raise HTTPException(status_code=404, detail="session not found")
     return crud.session_summary(db, session_id)
+
