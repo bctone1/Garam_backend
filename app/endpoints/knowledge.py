@@ -1,4 +1,4 @@
-# FastAPI 라우터
+# app/endpoints/knowledge.py
 from __future__ import annotations
 from typing import Optional, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File

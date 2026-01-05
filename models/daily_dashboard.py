@@ -1,3 +1,4 @@
+# models/daily_dashboard.py
 from __future__ import annotations
 from sqlalchemy import Column, Date, DateTime, Integer, Numeric, SmallInteger, Index, func, text
 from sqlalchemy.dialects.postgresql import JSONB

@@ -1,3 +1,4 @@
+# langchain_service/prompt/style.py
 from typing import Literal
 Style = Literal['professional','friendly','concise']
 

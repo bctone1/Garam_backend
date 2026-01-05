@@ -1,4 +1,4 @@
-# FastAPI 라우터
+# app/endpoints/faq.py
 from __future__ import annotations
 from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status

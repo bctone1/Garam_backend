@@ -1,4 +1,4 @@
-# SQLAlchemy ORM (물리설계 반영)
+# models/inquiry
 
 from sqlalchemy import (
     Column, BigInteger, String, Text, DateTime, ForeignKey,

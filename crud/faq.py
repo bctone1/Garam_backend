@@ -1,5 +1,4 @@
-# DB 접근 로직
-
+# crud/faq.py
 from __future__ import annotations
 from typing import Optional, List, Literal, Dict, Any
 from sqlalchemy import select, func

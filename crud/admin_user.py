@@ -2,7 +2,7 @@ from typing import Optional, List
 from sqlalchemy import select, update as sa_update, delete as sa_delete
 from sqlalchemy.orm import Session
 from models.admin_user import AdminUser
-
+# crud/admin_user.py
 
 # 기본 조회
 def get(db: Session, user_id: int) -> Optional[AdminUser]:

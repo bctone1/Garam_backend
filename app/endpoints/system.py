@@ -1,4 +1,4 @@
-# FastAPI 라우터
+# app/endpoints/system.py
 
 from __future__ import annotations
 from typing import List

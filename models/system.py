@@ -1,4 +1,4 @@
-# SQLAlchemy ORM (물리설계 반영)
+# models/system.py
 from sqlalchemy import (
     Column, BigInteger, Integer, Text, DateTime, ForeignKey,
     CheckConstraint, Index, func, text)

@@ -1,4 +1,4 @@
-# FastAPI 라우터
+# app/endpoints/admin_user.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from database.session import get_db

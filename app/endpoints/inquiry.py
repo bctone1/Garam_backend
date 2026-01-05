@@ -1,4 +1,4 @@
-# app/routers/inquiries.py
+# app/endpoints/inquiry.py
 from __future__ import annotations
 from typing import Optional
 from datetime import datetime

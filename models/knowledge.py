@@ -1,5 +1,4 @@
-# SQLAlchemy ORM (물리설계 반영): knowledge, knowledge_page, knowledge_chunk
-
+# models/knowledge.py
 from sqlalchemy import (
     Column,
     BigInteger,

@@ -1,3 +1,4 @@
+# models/faq.py
 from sqlalchemy import (
     Column, BigInteger, Text, Integer, DateTime, Numeric,
     CheckConstraint, Index, func, text, ForeignKey

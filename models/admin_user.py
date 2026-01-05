@@ -1,3 +1,4 @@
+# models/admin_user
 from sqlalchemy import Column, BigInteger, String, DateTime, func, Index
 from database.base import Base
 

@@ -1,3 +1,5 @@
+# langchain_service/embedding/setup.py
+
 from langchain_openai import OpenAIEmbeddings
 import core.config as config
 

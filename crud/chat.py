@@ -1,5 +1,4 @@
-# DB 접근 로직
-
+# crud/chat.py
 from __future__ import annotations
 from typing import Optional, List, Iterable, Literal, Any, Dict, Tuple
 from datetime import datetime, timezone

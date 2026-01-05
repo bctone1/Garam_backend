@@ -1,5 +1,4 @@
-# SQLAlchemy ORM (물리설계 반영): chat_session, message, feedback
-
+# models/chat.py
 from sqlalchemy import (
     Column, BigInteger, String, Text, Integer, DateTime, Boolean,
     ForeignKey, func, CheckConstraint, Index, text

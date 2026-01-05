@@ -1,4 +1,4 @@
-# garam_board_scrape.py
+# service/bs_url.py
 import re, time, csv
 from urllib.parse import urljoin
 import requests
