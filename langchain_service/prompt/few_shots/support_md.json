@@ -24,10 +24,6 @@
     "assistant": "안녕하세요, 가람포스텍입니다.\n\n**요약**\n- 기본은 택배 발송이며, 당일 직접 방문은 일반적으로 어렵습니다. 급한 경우에 한해 담당자 확인 후 예외적으로 안내드릴 수 있습니다.\n\n**가능한 선택지**\n- 무상 용지: 사업자등록번호 확인 후 카드 사용량 기준으로 무료 발송(평일 기준 2~3일)\n- 유상 용지: 3인치 1박스(50롤) 44,000원 / 2인치 20롤 8,800원(입금 확인 후 발송)\n- 착불 용지: 착불 발송(배송비 약 3,000원)\n\n**확인하겠습니다**\n- 용지 규격(3인치/2인치)과 필요한 수량\n- 오늘 반드시 필요한 상황인지(예: 내일 오전까지 필요 등)\n\n상황을 알려주시면 가장 빠른 방법으로 안내해 드리겠습니다."
     },
     {
-    "user": "원격지원 아이콘이 없어요. 어떻게 해야 해요?",
-    "assistant": "안녕하세요, 가람포스텍입니다.\n\n**진행 단계**\n1. 인터넷 브라우저를 열고 주소창에 786.co.kr을 입력해 주세요.\n2. 접속 후 키보드로 숫자 82를 입력해 주세요.\n3. 화면에서 1번을 클릭하면 원격지원 프로그램이 다운로드됩니다.\n4. 다운로드가 완료되면 실행해 주세요.\n\n**확인하겠습니다**\n- 실행하시면 화면에 숫자(접속 번호)가 표시됩니다. 해당 번호를 알려 주실 수 있을까요?\n\n원격으로 점검하여 빠르게 도움드리겠습니다. 원격 진행이 어려우시면 방문 접수로 바로 안내해 드리겠습니다."
-    },
-    {
     "user": "단말기에서 매출 집계표 출력하는 방법 알려줘",
     "assistant": "안녕하세요, 가람포스텍입니다.\n\n**진행 단계**\n1. 단말기에서 **집계** 버튼을 눌러 주세요.\n2. 다음 화면에서 **일별 집계**를 선택해 주세요.\n3. 날짜를 입력하시거나 표시된 날짜가 맞는지 확인하신 뒤 **입력**을 눌러 주세요.\n4. 매출 집계표가 출력됩니다.\n\n**확인할 점**\n- 영수증 용지가 충분한지 먼저 확인해 주세요(부족하면 교체가 필요합니다).\n\n출력 중 막히는 화면이 있으시면, 현재 화면에 보이는 문구를 그대로 알려 주세요."
     },
@@ -48,9 +44,8 @@
     "assistant": "안녕하세요, 가람포스텍입니다.\n\n**카드사 고객센터**\n- 비씨카드: 1588-4000\n- 국민카드: 1588-1688\n- 하나카드: 1588-6700\n- 신한카드: 1544-8800\n- 삼성카드: 1588-8700\n- 현대카드: 1577-6000\n- 롯데카드: 1588-8100\n- 농협카드: 1644-7400\n- 우리카드: 1644-9797\n\n원하시면 어떤 카드사인지 알려 주시면, 수수료/정산/승인 오류 관련 안내까지 함께 정리해 드리겠습니다."
     },
     {
-    "user": "KIS Agent 다운로드 링크 알려줘 (page_id=367651)",
-    "assistant": "**KIS Agent 다운로드는 아래 페이지에서 진행해 주세요.**\n \n- [다운로드 페이지](http://m.garampos.co.kr/bbs_shop/read.htm?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board&board_code=rwdboard&search_key=&key=&page=1&idx=367651)\n    \n- **원문 URL(복사용)**  \n    [http://m.garampos.co.kr/bbs_shop/read.htm?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board&board_code=rwdboard&search_key=&key=&page=1&idx=367651](http://m.garampos.co.kr/bbs_shop/read.htm?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board&board_code=rwdboard&search_key=&key=&page=1&idx=367651)"
-    },
+    "user": "KIS Agent 다운로드 받고 싶어 (page_id=367651)",
+    "assistant": "**KIS Agent 다운로드는 아래 페이지에서 진행해 주세요.**\n \n- [다운로드 페이지](http://m.garampos.co.kr/bbs_shop/read.htm?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board&board_code=rwdboard&search_key=&key=&page=1&idx=367651)\n    \n- **원문 URL(복사용)**  \n    [http://m.garampos.co.kr/bbs_shop/read.htm?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board&board_code=rwdboard&search_key=&key=&page=1&idx=367651](http://m.garampos.co.kr/bbs_shop/read.htm?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board&board_code=rwdboard&search_key=&key=&page=1&idx=367651)"    },
     {
     "user": "다운로드 링크를 안내해줘",
     "assistant": "- **KIS Agent는 아래 링크에서 다운로드하실 수 있습니다.**\n\n- 다운로드 페이지: [http://m.garampos.co.kr/bbs_shop/read.htm?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board&board_code=rwdboard&search_key=&key=&page=1&idx=367651](http://m.garampos.co.kr/bbs_shop/read.htm?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board&board_code=rwdboard&search_key=&key=&page=1&idx=367651)\n    \n- (클릭용) [KIS Agent 다운로드 페이지](http://m.garampos.co.kr/bbs_shop/read.htm?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board&board_code=rwdboard&search_key=&key=&page=1&idx=367651)"

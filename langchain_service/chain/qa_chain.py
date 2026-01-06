@@ -1,6 +1,9 @@
 # langchain_service/chain/qa_chain.py
 from __future__ import annotations
 
+import os
+import re
+import logging
 from operator import itemgetter
 from typing import Optional, Callable, List, Any
 
@@ -15,6 +18,115 @@ from service.knowledge_retrieval import retrieve_topk_hybrid
 from langchain_service.prompt.style import build_system_prompt, llm_params, STYLE_MAP
 from langchain_service.prompt.few_shots import load_few_shot_profile, few_shot_messages
 from core import config
+
+log = logging.getLogger("api_cost")
+DEBUG_RAG_URL = os.getenv("DEBUG_RAG_URL") == "1"
+
+# garampos detail url 템플릿
+_GARAMPOS_DETAIL_URL_TEMPLATE = (
+    "http://m.garampos.co.kr/bbs_shop/read.htm"
+    "?me_popup=&auto_frame=&cate_sub_idx=0&search_first_subject=&list_mode=board"
+    "&board_code=rwdboard&search_key=&key=&page=1&idx={idx}"
+)
+
+
+def _dbg_snip(s: str, n: int = 420) -> str:
+    return (s or "").replace("\n", "\\n")[:n]
+
+
+def _dbg_has_broken_url(s: str) -> bool:
+    t = s or ""
+    if "read.htm?" in t and "idx=" not in t:
+        return True
+    if re.search(r'href="[^"]*\n[^"]*"', t, flags=re.IGNORECASE):
+        return True
+    if "search_first_subject=" in t and "idx=" not in t:
+        return True
+    return False
+
+
+def _is_good_download_url(url: str) -> bool:
+    """
+    다운로드/상세 링크로 쓰기 적합한지 필터링
+    - idx= 가 있어야 함
+    - search_first_subject=만 있고 idx= 없으면 제외
+    """
+    u = (url or "").strip()
+    if not u:
+        return False
+    if "read.htm?" in u and "idx=" in u:
+        return True
+    return False
+
+
+def _collect_source_urls_from_text(text: str) -> List[str]:
+    """
+    chunk_text 안에서 정상 URL만 최대한 뽑아내기.
+    - detail_url 필드(JSON)
+    - 일반 URL 토큰
+    - page_id 로 idx 재구성(가능할 때)
+    """
+    t = text or ""
+    out: List[str] = []
+
+    # 1) JSON detail_url 우선
+    for m in re.finditer(r'"detail_url"\s*:\s*"([^"]+)"', t, flags=re.IGNORECASE):
+        url = m.group(1).strip()
+        if _is_good_download_url(url):
+            out.append(url)
+
+    # 2) 텍스트 내 URL 토큰
+    #    괄호/따옴표/공백 전까지 잘라서 URL만 잡음
+    for m in re.finditer(r'(https?://[^\s<>"\)\]]+)', t, flags=re.IGNORECASE):
+        url = m.group(1).strip()
+        if _is_good_download_url(url):
+            out.append(url)
+
+    # 3) page_id 있으면 idx로 복원
+    #    (네 데이터 구조에 page_id=idx 인 케이스가 많아서 응급처치로 매우 잘 먹힘)
+    for m in re.finditer(r'"page_id"\s*:\s*(\d+)', t, flags=re.IGNORECASE):
+        idx = m.group(1)
+        url = _GARAMPOS_DETAIL_URL_TEMPLATE.format(idx=idx)
+        if _is_good_download_url(url):
+            out.append(url)
+
+    # 중복 제거(순서 유지)
+    seen = set()
+    uniq: List[str] = []
+    for u in out:
+        if u not in seen:
+            seen.add(u)
+            uniq.append(u)
+    return uniq
+
+
+def _append_sources_section(context: str, chunks: list[Any]) -> str:
+    """
+    context 마지막에 [SOURCES] 섹션을 붙여서
+    LLM이 깨진 링크 대신 여기의 URL을 그대로 쓰도록 강제한다.
+    """
+    urls: List[str] = []
+    for c in chunks or []:
+        ct = getattr(c, "chunk_text", "") or ""
+        urls.extend(_collect_source_urls_from_text(ct))
+
+    # 중복 제거(순서 유지)
+    seen = set()
+    uniq: List[str] = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            uniq.append(u)
+
+    if not uniq:
+        return context
+
+    # 마크다운 자동 링크(<...>)로 제공 (쿼리스트링 안 잘리게)
+    lines = ["", "[SOURCES]"]
+    for u in uniq[:10]:
+        lines.append(f"- <{u}>")
+
+    return (context or "") + "\n" + "\n".join(lines) + "\n"
 
 
 def make_qa_chain(
@@ -44,7 +156,7 @@ def make_qa_chain(
 
     system_txt = build_system_prompt(style=style_key, **(policy_flags or {}))
 
-    # 출력 형식 지침
+    # 출력 형식 지침 + 링크 강제 규칙 추가
     system_txt = (
         system_txt
         + "\n\n추가 지침:\n"
@@ -54,9 +166,10 @@ def make_qa_chain(
         + "- 제공된 컨텍스트에 근거해서만 답해.\n"
         + "- 컨텍스트 근거가 부족하면 '없음'으로 끝내지 말고, 필요한 정보를 물어보는 확인 질문(clarify)으로 전환해.\n"
         + "- force_clarify가 True면 답변 대신 확인 질문만 해.\n"
+        + "- 다운로드/외부 링크는 컨텍스트의 [SOURCES] 섹션에 있는 URL만 그대로 사용해.\n"
     )
 
-    # ✅ few-shot 로드(없으면 조용히 스킵)
+    #  few-shot 로드(없으면 조용히 스킵)
     profile = None
     for cand in [few_shot_profile, "support_v1"]:
         try:
@@ -69,7 +182,6 @@ def make_qa_chain(
 
     fs_msgs: list[tuple[str, str]] = []
     if profile:
-        # rules는 JSON 전용일 수 있어서 여기서는 강제 적용하지 않고 examples만 사용
         fs_msgs = few_shot_messages(profile) or []
 
     def _clip_context(ctx: Any) -> str:
@@ -78,7 +190,6 @@ def make_qa_chain(
         return str(ctx)[:max_ctx_chars]
 
     def _retrieve(question: str) -> str:
-        # use_input_context=True면 이 함수는 호출되지 않음(=임베딩/검색 0회)
         vec = text_to_vector(question)
         chunks = retrieve_topk_hybrid(
             db,
@@ -87,7 +198,45 @@ def make_qa_chain(
             top_k=top_k,
             query_text=question,
         )
-        return "\n\n".join((getattr(c, "chunk_text", "") or "") for c in chunks)[:max_ctx_chars]
+
+        # 기본 context
+        context = "\n\n".join((getattr(c, "chunk_text", "") or "") for c in chunks)[:max_ctx_chars]
+        # URL 깨짐 방지: SOURCES 섹션을 서버가 붙여준다
+        context = _append_sources_section(context, chunks)
+
+        # ===== [DEBUG] URL 깨짐 진단: retrieval 직후 =====
+        if DEBUG_RAG_URL:
+            try:
+                log.info(
+                    "[URL-RETR] q=%s knowledge_id=%s top_k=%d got=%d",
+                    (question or "")[:120],
+                    knowledge_id,
+                    top_k,
+                    len(chunks) if chunks else 0,
+                )
+                for i, c in enumerate((chunks or [])[:8]):
+                    t = (getattr(c, "chunk_text", "") or "")
+                    cid = getattr(c, "id", None)
+                    log.info(
+                        "[URL-RETR] #%d chunk_id=%s has_read=%s has_idx=%s has_href=%s",
+                        i,
+                        cid,
+                        ("read.htm?" in t),
+                        ("idx=" in t),
+                        ("href=" in t),
+                    )
+                    if _dbg_has_broken_url(t):
+                        log.info("[URL-RETR] #%d text=%s", i, _dbg_snip(t, 520))
+
+                # SOURCES 결과도 같이 확인
+                srcs = _collect_source_urls_from_text(context)
+                log.info("[URL-RETR] sources_found=%d", len(srcs))
+                for i, u in enumerate(srcs[:10]):
+                    log.info("[URL-RETR] source[%d]=%s", i, u)
+            except Exception as e:
+                log.exception("[URL-RETR] debug failed: %s", e)
+
+        return context[:max_ctx_chars]
 
     def _has_specific_markers(q: str) -> bool:
         ql = q.lower()
@@ -125,7 +274,6 @@ def make_qa_chain(
 
     retriever = RunnableLambda(_retrieve)
 
-    # context 소스 선택: runner 주입(context) vs 내부 검색(retriever)
     if use_input_context:
         context_runnable = itemgetter("context") | RunnableLambda(_clip_context)
     else:
@@ -162,7 +310,6 @@ def make_qa_chain(
 
     prompt = ChatPromptTemplate.from_messages(messages)
 
-    # === LLM init ===
     params = llm_params(m.fast_response_mode)
     provider = getattr(config, "LLM_PROVIDER", "openai")
     model = getattr(config, "LLM_MODEL", getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
