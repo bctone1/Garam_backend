@@ -1,4 +1,4 @@
-# models/inquiry
+# models/inquiry.py
 
 from sqlalchemy import (
     Column, BigInteger, String, Text, DateTime, ForeignKey,
@@ -16,6 +16,7 @@ class Inquiry(Base):
     company = Column(String)
     phone = Column(String)
     content = Column(Text, nullable=False)
+    inquiry_type = Column(String, nullable=False, server_default="other")
     status = Column(String, nullable=False, server_default="new")
 
     assignee_admin_id = Column(
@@ -46,6 +47,12 @@ class Inquiry(Base):
             "status IN ('new','processing','on_hold','completed')",
             name="chk_inquiry_status",
         ),
+
+        CheckConstraint(
+            "inquiry_type IN ('paper_request','sales_report','kiosk_menu_update','other')",
+            name="chk_inquiry_type",
+        ),
+
         # 담당자가 없어지면(SET NULL) assigned_at 이 남아 있어도 허용
         CheckConstraint(
             "assignee_admin_id IS NULL OR assigned_at IS NOT NULL",
@@ -67,9 +74,13 @@ class Inquiry(Base):
             "customer_satisfaction IS NULL OR customer_satisfaction IN ('satisfied','unsatisfied')",
             name="chk_inquiry_customer_satisfaction",
         ),
+
         Index("idx_inquiry_status_created", "status", "created_at"),
         Index("idx_inquiry_assignee_status", "assignee_admin_id", "status", "created_at"),
         Index("idx_inquiry_created", "created_at"),
+
+        # 분기 화면용
+        Index("idx_inquiry_type_created", "inquiry_type", "created_at"),
     )
 
 
@@ -84,16 +95,13 @@ class InquiryHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     inquiry = relationship("Inquiry", back_populates="histories")
 
-
     __table_args__ = (
         CheckConstraint(
             "action IN ('new','assign','on_hold','resume','transfer','complete','note','contact','delete')",
             name="chk_inqh_action"
         ),
-
         Index("idx_inqh_inquiry_time", "inquiry_id", "created_at"),
         Index("idx_inqh_action_time", "action", "created_at"),
-
     )
 
 __all__ = ["Inquiry", "InquiryHistory"]

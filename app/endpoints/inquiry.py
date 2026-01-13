@@ -1,5 +1,6 @@
 # app/endpoints/inquiry.py
 from __future__ import annotations
+
 from typing import Optional
 from datetime import datetime
 
@@ -11,24 +12,39 @@ from crud import inquiry as crud
 from crud.inquiry import serialize_inquiry
 from models.inquiry import Inquiry
 from schemas.inquiry import (
-    InquiryCreate, InquiryUpdate, InquiryResponse, InquiryHistoryResponse,
-    AssignIn, UnassignIn, TransferIn, SetStatusIn, SatisfactionIn, HistoryNoteIn
+    InquiryCreate,
+    InquiryUpdate,
+    InquiryResponse,
+    InquiryHistoryResponse,
+    AssignIn,
+    UnassignIn,
+    TransferIn,
+    SetStatusIn,
+    SatisfactionIn,
+    HistoryNoteIn,
+    InquiryType,  # ✅ 추가
 )
 
 router = APIRouter(prefix="/inquiries", tags=["Inquiry"])
 
+
 # -------- 전체 조회 (관리자용) --------
 @router.get("/get_inquiry_list")
-def get_inquiry_list(db: Session = Depends(get_db)):
-    inquiries = (
+def get_inquiry_list(
+    inquiry_type: Optional[InquiryType] = Query(None),
+    db: Session = Depends(get_db),
+):
+    q = (
         db.query(Inquiry)
         .options(
             joinedload(Inquiry.assignee),
             joinedload(Inquiry.histories),
         )
-        .order_by(Inquiry.id.desc())
-        .all()
     )
+    if inquiry_type:
+        q = q.filter(Inquiry.inquiry_type == inquiry_type)
+
+    inquiries = q.order_by(Inquiry.id.desc()).all()
     return [serialize_inquiry(i) for i in inquiries]
 
 
@@ -43,6 +59,7 @@ def list_inquiries(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     status: Optional[str] = Query(None),
+    inquiry_type: Optional[InquiryType] = Query(None),
     assignee_admin_id: Optional[int] = Query(None),
     q: Optional[str] = Query(None, description="search in name/company/phone/content"),
     created_from: Optional[datetime] = Query(None),
@@ -54,6 +71,7 @@ def list_inquiries(
         offset=offset,
         limit=limit,
         status=status,  # type: ignore[arg-type]
+        inquiry_type=inquiry_type,
         assignee_admin_id=assignee_admin_id,
         q=q,
         created_from=created_from,
@@ -148,11 +166,13 @@ def list_histories(
 def add_history_note(inquiry_id: int, payload: HistoryNoteIn, db: Session = Depends(get_db)):
     if not crud.get(db, inquiry_id):
         raise HTTPException(status_code=404, detail="inquiry not found")
+
+    action = payload.action or "note"
+
     return crud.add_history_note(
         db,
         inquiry_id,
-        action=payload.action,
+        action=action,
         admin_id=payload.admin_id,
         details=payload.details,
     )
-

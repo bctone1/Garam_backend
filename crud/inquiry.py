@@ -1,16 +1,26 @@
 # crud/inquiry.py
 
 from __future__ import annotations
+
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime, timezone
+
 from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
+
 from models.inquiry import Inquiry, InquiryHistory
 from models.admin_user import AdminUser  # 이름 해석용
 
 Status = Literal["new", "processing", "on_hold", "completed"]
 Satisfaction = Literal["satisfied", "unsatisfied"]
-Action = Literal["assign", "on_hold", "resume", "transfer", "complete", "note", "contact", "delete"]
+
+# 추가/수정은 여기서하면 됨
+InquiryType = Literal["paper_request", "sales_report", "kiosk_menu_update", "other"]
+
+# InquiryHistory.action 제약과 일치 (new 포함)
+Action = Literal["new", "assign", "on_hold", "resume", "transfer", "complete", "note", "contact", "delete"]
+
+_ALLOWED_INQUIRY_TYPES = {"paper_request", "sales_report", "kiosk_menu_update", "other"}
 
 
 def _resolve_admin_name(db: Session, admin_id: Optional[int]) -> Optional[str]:
@@ -18,6 +28,15 @@ def _resolve_admin_name(db: Session, admin_id: Optional[int]) -> Optional[str]:
         return None
     row = db.get(AdminUser, admin_id)
     return row.name if row else None
+
+
+def _normalize_inquiry_type(v: Any) -> str:
+    if v in (None, "", "0", 0, "null", "None"):
+        return "other"
+    s = str(v).strip()
+    if s not in _ALLOWED_INQUIRY_TYPES:
+        raise ValueError(f"invalid inquiry_type: {s}")
+    return s
 
 
 def serialize_inquiry(inquiry: Inquiry):
@@ -28,6 +47,10 @@ def serialize_inquiry(inquiry: Inquiry):
         "phone": inquiry.phone,
         "content": inquiry.content,
         "status": inquiry.status,
+
+        # ✅ 신규(프론트용 camelCase)
+        "inquiryType": getattr(inquiry, "inquiry_type", "other"),
+
         "createdDate": inquiry.created_at.strftime("%Y-%m-%d %H:%M") if inquiry.created_at else None,
         "assignee": inquiry.assignee.name if inquiry.assignee else None,
         "assignedDate": inquiry.assigned_at.strftime("%Y-%m-%d %H:%M") if inquiry.assigned_at else None,
@@ -38,10 +61,10 @@ def serialize_inquiry(inquiry: Inquiry):
                 "action": h.action,
                 "admin": h.admin_name,
                 "timestamp": h.created_at.strftime("%Y-%m-%d %H:%M") if h.created_at else None,
-                "details": h.details
+                "details": h.details,
             }
             for h in inquiry.histories
-        ]
+        ],
     }
 
 
@@ -51,26 +74,35 @@ def get(db: Session, inquiry_id: int) -> Optional[Inquiry]:
 
 
 def list_inquiries(
-        db: Session,
-        *,
-        offset: int = 0,
-        limit: int = 50,
-        status: Optional[Status] = None,
-        assignee_admin_id: Optional[int] = None,
-        q: Optional[str] = None,
-        created_from: Optional[datetime] = None,
-        created_to: Optional[datetime] = None,
+    db: Session,
+    *,
+    offset: int = 0,
+    limit: int = 50,
+    status: Optional[Status] = None,
+    inquiry_type: Optional[InquiryType] = None,
+    assignee_admin_id: Optional[int] = None,
+    q: Optional[str] = None,
+    created_from: Optional[datetime] = None,
+    created_to: Optional[datetime] = None,
 ) -> List[Inquiry]:
     stmt = select(Inquiry)
     conds = []
+
     if status:
         conds.append(Inquiry.status == status)
+
+    if inquiry_type:
+        conds.append(Inquiry.inquiry_type == inquiry_type)
+
     if assignee_admin_id is not None:
         conds.append(Inquiry.assignee_admin_id == assignee_admin_id)
+
     if created_from:
         conds.append(Inquiry.created_at >= created_from)
+
     if created_to:
         conds.append(Inquiry.created_at < created_to)
+
     if q:
         like = f"%{q}%"
         conds.append(
@@ -79,8 +111,10 @@ def list_inquiries(
             | (Inquiry.phone.ilike(like))
             | (Inquiry.content.ilike(like))
         )
+
     if conds:
         stmt = stmt.where(and_(*conds))
+
     stmt = stmt.order_by(Inquiry.created_at.desc()).offset(offset).limit(min(limit, 100))
     return db.execute(stmt).scalars().all()
 
@@ -91,24 +125,29 @@ def create(db: Session, data: dict) -> Inquiry:
         data["assignee_admin_id"] = None
     if data.get("customer_satisfaction") in ("", "null", "None"):
         data["customer_satisfaction"] = None
+
+    data["inquiry_type"] = _normalize_inquiry_type(data.get("inquiry_type"))
+
     if (data.get("assignee_admin_id") is None) != (data.get("assigned_at") is None):
         data["assignee_admin_id"] = None
         data["assigned_at"] = None
-    # 완료 상태면 완료시각 보정
+
     if data.get("status") == "completed" and not data.get("completed_at"):
         data["completed_at"] = datetime.now(timezone.utc)
 
     obj = Inquiry(**data)
     db.add(obj)
-    db.flush()    # obj.id
+    db.flush()  # obj.id
 
-# 안내 문구 추가
-    db.add(InquiryHistory(
-        inquiry_id=obj.id,
-        action="new",
-        admin_name="시스템",
-        details="챗봇을 통해 문의가 접수되었습니다."
-    ))
+    # 안내 문구 추가
+    db.add(
+        InquiryHistory(
+            inquiry_id=obj.id,
+            action="new",
+            admin_name="시스템",
+            details="챗봇을 통해 문의가 접수되었습니다.",
+        )
+    )
 
     db.commit()
     db.refresh(obj)
@@ -120,10 +159,14 @@ def update(db: Session, inquiry_id: int, data: Dict[str, Any]) -> Optional[Inqui
     if not obj:
         return None
 
-    # 일관성 보조
+    if "inquiry_type" in data:
+        data["inquiry_type"] = _normalize_inquiry_type(data.get("inquiry_type"))
+
+    # 일관성 보조 (assignee_admin_id / assigned_at)
     if ("assignee_admin_id" in data) ^ ("assigned_at" in data):
         data.setdefault("assignee_admin_id", None)
         data.setdefault("assigned_at", None)
+
     if data.get("status") == "completed" and obj.completed_at is None and not data.get("completed_at"):
         data["completed_at"] = datetime.now(timezone.utc)
 
@@ -154,13 +197,6 @@ def assign(db: Session, inquiry_id: int, admin_id: int, *, actor_admin_id: Optio
     obj.assigned_at = datetime.now(timezone.utc)
     obj.status = "processing"
     db.add(obj)
-    # _add_history(
-    #     db,
-    #     inquiry_id,
-    #     action="assign",
-    #     admin_name=_resolve_admin_name(db, actor_admin_id),
-    #     details=f"assignee_admin_id={admin_id}",
-    # )
     db.commit()
     db.refresh(obj)
     return obj
@@ -185,33 +221,27 @@ def unassign(db: Session, inquiry_id: int, *, actor_admin_id: Optional[int] = No
     return obj
 
 
-def transfer(db: Session, inquiry_id: int, to_admin_id: int, *, actor_admin_id: Optional[int] = None) -> Optional[
-    Inquiry]:
+def transfer(
+    db: Session, inquiry_id: int, to_admin_id: int, *, actor_admin_id: Optional[int] = None
+) -> Optional[Inquiry]:
     obj = get(db, inquiry_id)
     if not obj:
         return None
     obj.assignee_admin_id = to_admin_id
     obj.assigned_at = datetime.now(timezone.utc)
     db.add(obj)
-    # _add_history(
-    #     db,
-    #     inquiry_id,
-    #     action="transfer",
-    #     admin_name=_resolve_admin_name(db, actor_admin_id),
-    #     details=f"to_admin_id={to_admin_id}",
-    # )
     db.commit()
     db.refresh(obj)
     return obj
 
 
 def set_status(
-        db: Session,
-        inquiry_id: int,
-        status: Status,
-        *,
-        actor_admin_id: Optional[int] = None,
-        details: Optional[str] = None,
+    db: Session,
+    inquiry_id: int,
+    status: Status,
+    *,
+    actor_admin_id: Optional[int] = None,
+    details: Optional[str] = None,
 ) -> Optional[Inquiry]:
     obj = get(db, inquiry_id)
     if not obj:
@@ -220,13 +250,6 @@ def set_status(
     if status == "completed" and obj.completed_at is None:
         obj.completed_at = datetime.now(timezone.utc)
     db.add(obj)
-    # _add_history(
-    #     db,
-    #     inquiry_id,
-    #     action=("complete" if status == "completed" else "note"),
-    #     admin_name=_resolve_admin_name(db, actor_admin_id),
-    #     details=(details or f"status={status}"),
-    # )
     db.commit()
     db.refresh(obj)
     return obj
@@ -273,8 +296,14 @@ def list_histories(db: Session, inquiry_id: int, *, offset: int = 0, limit: int 
     return db.execute(stmt).scalars().all()
 
 
-def add_history_note(db: Session, inquiry_id: int, action: str, *, admin_id: Optional[int],
-                     details: Optional[str]) -> InquiryHistory:
+def add_history_note(
+    db: Session,
+    inquiry_id: int,
+    action: str,
+    *,
+    admin_id: Optional[int],
+    details: Optional[str],
+) -> InquiryHistory:
     hist = _add_history(
         db,
         inquiry_id,

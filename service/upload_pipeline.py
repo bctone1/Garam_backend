@@ -156,7 +156,7 @@ def _normalize_extracted_text(text: str) -> str:
             break
         t = new_t
 
-    # ✅ 가람포스텍 리스트 깨짐 복원(가람 URL일 때만 동작)
+    # 가람포스텍 리스트 깨짐 복원(가람 URL일 때만 동작)
     t = _normalize_garampos_pdf_text(t)
 
     return t

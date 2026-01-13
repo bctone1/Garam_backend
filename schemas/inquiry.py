@@ -8,23 +8,30 @@ from typing import Optional, Literal
 Status = Literal["new", "processing", "on_hold", "completed"]
 Satisfaction = Literal["satisfied", "unsatisfied"]
 
+# 문의하기 메뉴 추가/수정 (model 제약도 수정해야함)
+InquiryType = Literal["paper_request", "sales_report", "kiosk_menu_update", "other"]
+
 class InquiryBase(BaseModel):
     customer_name: str
     company: Optional[str] = None
     phone: Optional[str] = None
     content: str
+    inquiry_type: InquiryType = "other"
     status: Status = "new"
     assignee_admin_id: Optional[int] = None
     customer_satisfaction: Optional[Satisfaction] = None
 
+
 class InquiryCreate(InquiryBase):
     pass
+
 
 class InquiryUpdate(BaseModel):
     customer_name: Optional[str] = None
     company: Optional[str] = None
     phone: Optional[str] = None
     content: Optional[str] = None
+    inquiry_type: Optional[InquiryType] = None
     status: Optional[Status] = None
     assignee_admin_id: Optional[int] = None
     customer_satisfaction: Optional[Satisfaction] = None
@@ -45,8 +52,9 @@ class InquiryResponse(InquiryBase):
 # InquiryHistory
 # -------------------------------
 Action = Literal[
-    "new","assign", "on_hold", "resume", "transfer", "complete", "note", "contact", "delete"
+    "new", "assign", "on_hold", "resume", "transfer", "complete", "note", "contact", "delete"
 ]
+
 
 class InquiryHistoryBase(BaseModel):
     inquiry_id: int
@@ -55,8 +63,10 @@ class InquiryHistoryBase(BaseModel):
     admin_name: Optional[str] = None
     details: Optional[str] = None
 
+
 class InquiryHistoryCreate(InquiryHistoryBase):
     pass
+
 
 class InquiryHistoryResponse(InquiryHistoryBase):
     id: int
@@ -65,24 +75,30 @@ class InquiryHistoryResponse(InquiryHistoryBase):
     class Config:
         from_attributes = True
 
+
 class AssignIn(BaseModel):
     admin_id: int
     actor_admin_id: Optional[int] = None
 
+
 class UnassignIn(BaseModel):
     actor_admin_id: Optional[int] = None
+
 
 class TransferIn(BaseModel):
     to_admin_id: int
     actor_admin_id: Optional[int] = None
+
 
 class SetStatusIn(BaseModel):
     status: Status
     actor_admin_id: Optional[int] = None
     details: Optional[str] = None
 
+
 class SatisfactionIn(BaseModel):
     satisfaction: Satisfaction
+
 
 class HistoryNoteIn(BaseModel):
     admin_id: Optional[int] = None
