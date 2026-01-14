@@ -1,6 +1,9 @@
-from pydantic import BaseModel, Field
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Optional, Literal, List
+
+from pydantic import BaseModel, Field
 
 # -------------------------------
 # Inquiry
@@ -8,7 +11,6 @@ from typing import Optional, Literal, List
 Status = Literal["new", "processing", "on_hold", "completed"]
 Satisfaction = Literal["satisfied", "unsatisfied"]
 
-# 문의 분기
 InquiryType = Literal["paper_request", "sales_report", "kiosk_menu_update", "other"]
 StorageType = Literal["local", "s3"]
 
@@ -17,7 +19,7 @@ StorageType = Literal["local", "s3"]
 # InquiryAttachment
 # -------------------------------
 class InquiryAttachmentBase(BaseModel):
-    storage_type: StorageType = "local"  # 기본값 local
+    storage_type: StorageType = "local"
     storage_key: str
     original_name: Optional[str] = None
     content_type: Optional[str] = None
@@ -48,7 +50,13 @@ class InquiryBase(BaseModel):
     content: str
     inquiry_type: InquiryType = "other"
     status: Status = "new"
+
     assignee_admin_id: Optional[int] = None
+
+    assigned_by_admin_id: Optional[int] = None
+    delegated_from_admin_id: Optional[int] = None
+    completed_by_admin_id: Optional[int] = None
+
     customer_satisfaction: Optional[Satisfaction] = None
 
 
@@ -64,8 +72,15 @@ class InquiryUpdate(BaseModel):
     content: Optional[str] = None
     inquiry_type: Optional[InquiryType] = None
     status: Optional[Status] = None
+
     assignee_admin_id: Optional[int] = None
+
+    assigned_by_admin_id: Optional[int] = None
+    delegated_from_admin_id: Optional[int] = None
+    completed_by_admin_id: Optional[int] = None
+
     customer_satisfaction: Optional[Satisfaction] = None
+
     assigned_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -86,7 +101,15 @@ class InquiryResponse(InquiryBase):
 # InquiryHistory
 # -------------------------------
 Action = Literal[
-    "new", "assign", "on_hold", "resume", "transfer", "complete", "note", "contact", "delete"
+    "new",
+    "assign",
+    "on_hold",
+    "resume",
+    "transfer",
+    "complete",
+    "note",
+    "contact",
+    "delete",
 ]
 
 
@@ -109,6 +132,9 @@ class InquiryHistoryResponse(InquiryHistoryBase):
         from_attributes = True
 
 
+# -------------------------------
+# Workflow inputs
+# -------------------------------
 class AssignIn(BaseModel):
     admin_id: int
     actor_admin_id: Optional[int] = None
