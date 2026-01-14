@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 
 # -------------------------------
 # Inquiry
@@ -8,9 +8,38 @@ from typing import Optional, Literal
 Status = Literal["new", "processing", "on_hold", "completed"]
 Satisfaction = Literal["satisfied", "unsatisfied"]
 
-# 문의하기 메뉴 추가/수정 (model 제약도 수정해야함)
+# 문의 분기
 InquiryType = Literal["paper_request", "sales_report", "kiosk_menu_update", "other"]
+StorageType = Literal["local", "s3"]
 
+
+# -------------------------------
+# InquiryAttachment
+# -------------------------------
+class InquiryAttachmentBase(BaseModel):
+    storage_type: StorageType = "local"  # 기본값 local
+    storage_key: str
+    original_name: Optional[str] = None
+    content_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+
+
+class InquiryAttachmentCreate(InquiryAttachmentBase):
+    pass
+
+
+class InquiryAttachmentResponse(InquiryAttachmentBase):
+    id: int
+    inquiry_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# -------------------------------
+# Inquiry
+# -------------------------------
 class InquiryBase(BaseModel):
     customer_name: str
     company: Optional[str] = None
@@ -23,7 +52,7 @@ class InquiryBase(BaseModel):
 
 
 class InquiryCreate(InquiryBase):
-    pass
+    attachments: Optional[List[InquiryAttachmentCreate]] = None
 
 
 class InquiryUpdate(BaseModel):
@@ -38,11 +67,13 @@ class InquiryUpdate(BaseModel):
     assigned_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
+
 class InquiryResponse(InquiryBase):
     id: int
     created_at: datetime
     assigned_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    attachments: List[InquiryAttachmentResponse] = []
 
     class Config:
         from_attributes = True
@@ -59,7 +90,6 @@ Action = Literal[
 class InquiryHistoryBase(BaseModel):
     inquiry_id: int
     action: Action
-    # ORM과 맞춤: id 대신 이름 문자열만 저장
     admin_name: Optional[str] = None
     details: Optional[str] = None
 

@@ -1,18 +1,26 @@
 # app/endpoints/inquiry.py
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+    Form,
+    File,
+    UploadFile,
+)
 from sqlalchemy.orm import Session, joinedload
 
 from database.session import get_db
 from crud import inquiry as crud
-from crud.inquiry import serialize_inquiry
+from crud.inquiry import serialize_inquiry, MAX_ATTACHMENTS
 from models.inquiry import Inquiry
 from schemas.inquiry import (
-    InquiryCreate,
     InquiryUpdate,
     InquiryResponse,
     InquiryHistoryResponse,
@@ -22,11 +30,10 @@ from schemas.inquiry import (
     SetStatusIn,
     SatisfactionIn,
     HistoryNoteIn,
-    InquiryType,  # ✅ 추가
+    InquiryType,
 )
 
 router = APIRouter(prefix="/inquiries", tags=["Inquiry"])
-
 
 # -------- 전체 조회 (관리자용) --------
 @router.get("/get_inquiry_list")
@@ -39,6 +46,7 @@ def get_inquiry_list(
         .options(
             joinedload(Inquiry.assignee),
             joinedload(Inquiry.histories),
+            joinedload(Inquiry.attachments),
         )
     )
     if inquiry_type:
@@ -50,8 +58,42 @@ def get_inquiry_list(
 
 # -------- CRUD --------
 @router.post("/", response_model=InquiryResponse, status_code=status.HTTP_201_CREATED)
-def create_inquiry(payload: InquiryCreate, db: Session = Depends(get_db)):
-    return crud.create(db, payload.model_dump(exclude_unset=True))
+def create_inquiry(
+    customer_name: str = Form(...),
+    company: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    content: str = Form(...),
+    inquiry_type: InquiryType = Form("other"),
+    files: Optional[List[UploadFile]] = File(None, description="최대 이미지 3장"),
+    db: Session = Depends(get_db),
+):
+    files = files or []
+    if len(files) > MAX_ATTACHMENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"attachments max {MAX_ATTACHMENTS}",
+        )
+
+    # 1) 문의 먼저 생성
+    obj = crud.create(
+        db,
+        {
+            "customer_name": customer_name,
+            "company": company,
+            "phone": phone,
+            "content": content,
+            "inquiry_type": inquiry_type,
+        },
+    )
+
+    # 2) 파일 있으면 로컬 저장 + attachment 레코드 추가 (storage_type 기본 local)
+    if files:
+        saved_meta = crud.save_inquiry_files_local(inquiry_id=obj.id, files=files)
+        crud.add_attachments(db, obj.id, saved_meta)
+        db.commit()
+        db.refresh(obj)
+
+    return obj
 
 
 @router.get("/", response_model=list[InquiryResponse])
@@ -81,7 +123,16 @@ def list_inquiries(
 
 @router.get("/{inquiry_id}", response_model=InquiryResponse)
 def get_inquiry(inquiry_id: int, db: Session = Depends(get_db)):
-    obj = crud.get(db, inquiry_id)
+    obj = (
+        db.query(Inquiry)
+        .options(
+            joinedload(Inquiry.assignee),
+            joinedload(Inquiry.histories),
+            joinedload(Inquiry.attachments),
+        )
+        .filter(Inquiry.id == inquiry_id)
+        .first()
+    )
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
     return obj
@@ -102,7 +153,7 @@ def delete_inquiry(inquiry_id: int, db: Session = Depends(get_db)):
     return None
 
 
-# -------- 업무 흐름 (assign / unassign / transfer / status / satisfaction) --------
+# -------- Workflow --------
 @router.post("/{inquiry_id}/assign", response_model=InquiryResponse)
 def assign(inquiry_id: int, payload: AssignIn, db: Session = Depends(get_db)):
     obj = crud.assign(db, inquiry_id, payload.admin_id, actor_admin_id=payload.actor_admin_id)

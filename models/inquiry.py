@@ -1,8 +1,15 @@
 # models/inquiry.py
 
 from sqlalchemy import (
-    Column, BigInteger, String, Text, DateTime, ForeignKey,
-    func, CheckConstraint, Index
+    Column,
+    BigInteger,
+    String,
+    Text,
+    DateTime,
+    ForeignKey,
+    func,
+    CheckConstraint,
+    Index,
 )
 from sqlalchemy.orm import relationship
 from database.base import Base
@@ -16,6 +23,7 @@ class Inquiry(Base):
     company = Column(String)
     phone = Column(String)
     content = Column(Text, nullable=False)
+
     inquiry_type = Column(String, nullable=False, server_default="other")
     status = Column(String, nullable=False, server_default="new")
 
@@ -35,6 +43,7 @@ class Inquiry(Base):
         backref="inquiries",
         foreign_keys=[assignee_admin_id],
     )
+
     histories = relationship(
         "InquiryHistory",
         back_populates="inquiry",
@@ -42,17 +51,22 @@ class Inquiry(Base):
         order_by="InquiryHistory.id.asc()",
     )
 
+    attachments = relationship(
+        "InquiryAttachment",
+        back_populates="inquiry",
+        cascade="all, delete-orphan",
+        order_by="InquiryAttachment.id.asc()",
+    )
+
     __table_args__ = (
         CheckConstraint(
             "status IN ('new','processing','on_hold','completed')",
             name="chk_inquiry_status",
         ),
-
         CheckConstraint(
             "inquiry_type IN ('paper_request','sales_report','kiosk_menu_update','other')",
             name="chk_inquiry_type",
         ),
-
         # 담당자가 없어지면(SET NULL) assigned_at 이 남아 있어도 허용
         CheckConstraint(
             "assignee_admin_id IS NULL OR assigned_at IS NOT NULL",
@@ -74,13 +88,41 @@ class Inquiry(Base):
             "customer_satisfaction IS NULL OR customer_satisfaction IN ('satisfied','unsatisfied')",
             name="chk_inquiry_customer_satisfaction",
         ),
-
         Index("idx_inquiry_status_created", "status", "created_at"),
         Index("idx_inquiry_assignee_status", "assignee_admin_id", "status", "created_at"),
         Index("idx_inquiry_created", "created_at"),
-
         # 분기 화면용
         Index("idx_inquiry_type_created", "inquiry_type", "created_at"),
+    )
+
+
+class InquiryAttachment(Base):
+    __tablename__ = "inquiry_attachment"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    inquiry_id = Column(
+        BigInteger,
+        ForeignKey("inquiry.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    storage_key = Column(String, nullable=False)  # 예: s3 key / local relative path
+    original_name = Column(String)                # 고객이 올린 원본 파일명
+    content_type = Column(String)                 # image/png, image/jpeg ...
+    size_bytes = Column(BigInteger)               # 파일 크기
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    inquiry = relationship("Inquiry", back_populates="attachments")
+
+    __table_args__ = (
+        CheckConstraint(
+            "content_type IS NULL OR content_type LIKE 'image/%'",
+            name="chk_inqa_content_type_image",
+        ),
+        Index("idx_inqa_inquiry_time", "inquiry_id", "created_at"),
+        Index("idx_inqa_inquiry", "inquiry_id"),
     )
 
 
@@ -93,15 +135,17 @@ class InquiryHistory(Base):
     admin_name = Column(String)
     details = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
     inquiry = relationship("Inquiry", back_populates="histories")
 
     __table_args__ = (
         CheckConstraint(
             "action IN ('new','assign','on_hold','resume','transfer','complete','note','contact','delete')",
-            name="chk_inqh_action"
+            name="chk_inqh_action",
         ),
         Index("idx_inqh_inquiry_time", "inquiry_id", "created_at"),
         Index("idx_inqh_action_time", "action", "created_at"),
     )
 
-__all__ = ["Inquiry", "InquiryHistory"]
+
+__all__ = ["Inquiry", "InquiryHistory", "InquiryAttachment"]
