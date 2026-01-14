@@ -91,7 +91,6 @@ class Inquiry(Base):
         Index("idx_inquiry_status_created", "status", "created_at"),
         Index("idx_inquiry_assignee_status", "assignee_admin_id", "status", "created_at"),
         Index("idx_inquiry_created", "created_at"),
-        # 분기 화면용
         Index("idx_inquiry_type_created", "inquiry_type", "created_at"),
     )
 
@@ -107,8 +106,11 @@ class InquiryAttachment(Base):
         nullable=False,
     )
 
-    storage_key = Column(String, nullable=False)  # 예: s3 key / local relative path
-    original_name = Column(String)                # 고객이 올린 원본 파일명
+    # ✅ 추가: storage_type (기본 local)
+    storage_type = Column(String, nullable=False, server_default="local")  # local | s3
+
+    storage_key = Column(String, nullable=False)  # s3 key / local relative path
+    original_name = Column(String)                # 고객 원본 파일명
     content_type = Column(String)                 # image/png, image/jpeg ...
     size_bytes = Column(BigInteger)               # 파일 크기
 
@@ -117,6 +119,10 @@ class InquiryAttachment(Base):
     inquiry = relationship("Inquiry", back_populates="attachments")
 
     __table_args__ = (
+        CheckConstraint(
+            "storage_type IN ('local','s3')",
+            name="chk_inqa_storage_type",
+        ),
         CheckConstraint(
             "content_type IS NULL OR content_type LIKE 'image/%'",
             name="chk_inqa_content_type_image",

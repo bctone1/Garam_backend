@@ -9,7 +9,7 @@ from uuid import uuid4
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime, timezone
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.orm import Session
 
 import core.config as config
@@ -191,8 +191,10 @@ def add_attachments(
     normalized = _validate_and_normalize_attachments(attachments)
 
     existing_cnt = db.execute(
-        select(InquiryAttachment).where(InquiryAttachment.inquiry_id == inquiry_id)
-    ).scalars().count()
+        select(func.count())
+        .select_from(InquiryAttachment)
+        .where(InquiryAttachment.inquiry_id == inquiry_id)
+    ).scalar_one()
 
     if existing_cnt + len(normalized) > MAX_ATTACHMENTS:
         raise ValueError(f"attachments max {MAX_ATTACHMENTS}")
@@ -202,13 +204,14 @@ def add_attachments(
         objs.append(
             InquiryAttachment(
                 inquiry_id=inquiry_id,
-                storage_type=a["storage_type"],  # 모델에 컬럼 있어야 함
+                storage_type=a["storage_type"],
                 storage_key=a["storage_key"],
                 original_name=a.get("original_name"),
                 content_type=a.get("content_type"),
                 size_bytes=a.get("size_bytes"),
             )
         )
+
     db.add_all(objs)
     return objs
 

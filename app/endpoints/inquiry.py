@@ -35,6 +35,7 @@ from schemas.inquiry import (
 
 router = APIRouter(prefix="/inquiries", tags=["Inquiry"])
 
+
 # -------- 전체 조회 (관리자용) --------
 @router.get("/get_inquiry_list")
 def get_inquiry_list(
@@ -56,25 +57,22 @@ def get_inquiry_list(
     return [serialize_inquiry(i) for i in inquiries]
 
 
-# -------- CRUD --------
+# -------- CRUD (고객 문의 접수: multipart/form-data) --------
 @router.post("/", response_model=InquiryResponse, status_code=status.HTTP_201_CREATED)
 def create_inquiry(
     customer_name: str = Form(...),
+    content: str = Form(...),
     company: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
-    content: str = Form(...),
     inquiry_type: InquiryType = Form("other"),
-    files: Optional[List[UploadFile]] = File(None, description="최대 이미지 3장"),
+    files: List[UploadFile] = File(default_factory=list, description="최대 이미지 3장"),
+
     db: Session = Depends(get_db),
 ):
-    files = files or []
     if len(files) > MAX_ATTACHMENTS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"attachments max {MAX_ATTACHMENTS}",
-        )
+        raise HTTPException(status_code=400, detail=f"attachments max {MAX_ATTACHMENTS}")
 
-    # 1) 문의 먼저 생성
+    # 1) 문의 생성
     obj = crud.create(
         db,
         {
@@ -86,7 +84,7 @@ def create_inquiry(
         },
     )
 
-    # 2) 파일 있으면 로컬 저장 + attachment 레코드 추가 (storage_type 기본 local)
+    # 2) 파일 있으면 로컬 저장 + attachment 레코드 추가
     if files:
         saved_meta = crud.save_inquiry_files_local(inquiry_id=obj.id, files=files)
         crud.add_attachments(db, obj.id, saved_meta)
