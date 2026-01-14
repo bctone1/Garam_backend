@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, Literal, List
 
@@ -41,8 +41,9 @@ class InquiryAttachmentResponse(InquiryAttachmentBase):
 # Inquiry
 # -------------------------------
 class InquiryBase(BaseModel):
-    customer_name: str
-    company: Optional[str] = None
+    business_name: str
+    business_number: Optional[str] = None
+
     phone: Optional[str] = None
     content: str
     inquiry_type: InquiryType = "other"
@@ -56,8 +57,9 @@ class InquiryCreate(InquiryBase):
 
 
 class InquiryUpdate(BaseModel):
-    customer_name: Optional[str] = None
-    company: Optional[str] = None
+    business_name: Optional[str] = None
+    business_number: Optional[str] = None
+
     phone: Optional[str] = None
     content: Optional[str] = None
     inquiry_type: Optional[InquiryType] = None
@@ -73,7 +75,8 @@ class InquiryResponse(InquiryBase):
     created_at: datetime
     assigned_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    attachments: List[InquiryAttachmentResponse] = []
+
+    attachments: List[InquiryAttachmentResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

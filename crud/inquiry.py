@@ -26,7 +26,6 @@ Status = Literal["new", "processing", "on_hold", "completed"]
 Satisfaction = Literal["satisfied", "unsatisfied"]
 InquiryType = Literal["paper_request", "sales_report", "kiosk_menu_update", "other"]
 
-
 Action = Literal["new", "assign", "on_hold", "resume", "transfer", "complete", "note", "contact", "delete"]
 
 # 첨부 storage 타입(기본 local)
@@ -75,8 +74,8 @@ def _safe_filename(name: str) -> str:
 def serialize_inquiry(inquiry: Inquiry):
     return {
         "id": inquiry.id,
-        "name": inquiry.customer_name,
-        "company": inquiry.company,
+        "businessName": inquiry.business_name,
+        "businessNumber": inquiry.business_number,
         "phone": inquiry.phone,
         "content": inquiry.content,
         "status": inquiry.status,
@@ -147,8 +146,8 @@ def save_inquiry_files_local(
     files: List[UploadFile],
 ) -> List[Dict[str, Any]]:
     """
-    (선택) 멀티파트 업로드를 엔드포인트에서 받는다면 이 헬퍼로 로컬 저장 후,
-    반환된 dict 리스트를 create(..., attachments=...)에 넣으면 됨.
+    멀티파트로 받은 파일을 로컬 저장하고,
+    add_attachments(db, inquiry_id, saved_meta)로 넣을 수 있는 dict 리스트를 리턴.
     """
     if len(files) > MAX_ATTACHMENTS:
         raise ValueError(f"attachments max {MAX_ATTACHMENTS}")
@@ -252,8 +251,8 @@ def list_inquiries(
     if q:
         like = f"%{q}%"
         conds.append(
-            (Inquiry.customer_name.ilike(like))
-            | (Inquiry.company.ilike(like))
+            (Inquiry.business_name.ilike(like))
+            | (Inquiry.business_number.ilike(like))
             | (Inquiry.phone.ilike(like))
             | (Inquiry.content.ilike(like))
         )
@@ -288,7 +287,6 @@ def create(db: Session, data: dict) -> Inquiry:
     db.add(obj)
     db.flush()
 
-    # 안내 문구(히스토리)
     db.add(
         InquiryHistory(
             inquiry_id=obj.id,

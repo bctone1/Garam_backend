@@ -60,15 +60,16 @@ def get_inquiry_list(
 # -------- CRUD (고객 문의 접수: multipart/form-data) --------
 @router.post("/", response_model=InquiryResponse, status_code=status.HTTP_201_CREATED)
 def create_inquiry(
-    customer_name: str = Form(...),
+    business_name: str = Form(...),
     content: str = Form(...),
-    company: Optional[str] = Form(None),
+    business_number: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
     inquiry_type: InquiryType = Form("other"),
-    files: List[UploadFile] = File(default_factory=list, description="최대 이미지 3장"),
+    files: Optional[List[UploadFile]] = File(None, description="최대 이미지 3장"),
 
     db: Session = Depends(get_db),
 ):
+    files = files or []
     if len(files) > MAX_ATTACHMENTS:
         raise HTTPException(status_code=400, detail=f"attachments max {MAX_ATTACHMENTS}")
 
@@ -76,8 +77,8 @@ def create_inquiry(
     obj = crud.create(
         db,
         {
-            "customer_name": customer_name,
-            "company": company,
+            "business_name": business_name,
+            "business_number": business_number,
             "phone": phone,
             "content": content,
             "inquiry_type": inquiry_type,
@@ -101,7 +102,8 @@ def list_inquiries(
     status: Optional[str] = Query(None),
     inquiry_type: Optional[InquiryType] = Query(None),
     assignee_admin_id: Optional[int] = Query(None),
-    q: Optional[str] = Query(None, description="search in name/company/phone/content"),
+    # ✅ 문구도 업데이트(실제 검색 대상)
+    q: Optional[str] = Query(None, description="search in business_name/business_number/phone/content"),
     created_from: Optional[datetime] = Query(None),
     created_to: Optional[datetime] = Query(None),
     db: Session = Depends(get_db),

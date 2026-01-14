@@ -19,8 +19,13 @@ class Inquiry(Base):
     __tablename__ = "inquiry"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    customer_name = Column(String, nullable=False)
-    company = Column(String)
+
+    # ✅ 최종 네이밍
+    # - customer_name -> business_name (NOT NULL)
+    # - company -> business_number (NULL)
+    business_name = Column(String, nullable=False)
+    business_number = Column(String, nullable=True)
+
     phone = Column(String)
     content = Column(Text, nullable=False)
 
@@ -67,7 +72,6 @@ class Inquiry(Base):
             "inquiry_type IN ('paper_request','sales_report','kiosk_menu_update','other')",
             name="chk_inquiry_type",
         ),
-        # 담당자가 없어지면(SET NULL) assigned_at 이 남아 있어도 허용
         CheckConstraint(
             "assignee_admin_id IS NULL OR assigned_at IS NOT NULL",
             name="chk_inquiry_assignment_consistency",
@@ -92,6 +96,8 @@ class Inquiry(Base):
         Index("idx_inquiry_assignee_status", "assignee_admin_id", "status", "created_at"),
         Index("idx_inquiry_created", "created_at"),
         Index("idx_inquiry_type_created", "inquiry_type", "created_at"),
+        # 필요하면 검색용(선택)
+        Index("idx_inquiry_business_name_created", "business_name", "created_at"),
     )
 
 
@@ -106,13 +112,11 @@ class InquiryAttachment(Base):
         nullable=False,
     )
 
-    # ✅ 추가: storage_type (기본 local)
     storage_type = Column(String, nullable=False, server_default="local")  # local | s3
-
-    storage_key = Column(String, nullable=False)  # s3 key / local relative path
-    original_name = Column(String)                # 고객 원본 파일명
-    content_type = Column(String)                 # image/png, image/jpeg ...
-    size_bytes = Column(BigInteger)               # 파일 크기
+    storage_key = Column(String, nullable=False)  # local relative path or s3 key
+    original_name = Column(String)
+    content_type = Column(String)
+    size_bytes = Column(BigInteger)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
