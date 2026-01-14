@@ -102,7 +102,7 @@ def list_inquiries(
     status: Optional[str] = Query(None),
     inquiry_type: Optional[InquiryType] = Query(None),
     assignee_admin_id: Optional[int] = Query(None),
-    # ✅ 문구도 업데이트(실제 검색 대상)
+
     q: Optional[str] = Query(None, description="search in business_name/business_number/phone/content"),
     created_from: Optional[datetime] = Query(None),
     created_to: Optional[datetime] = Query(None),

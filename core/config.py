@@ -38,7 +38,8 @@ def _parse_alias_map(v: str | None) -> dict[str, str] | None:
 
 # 1) 경로
 BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "file" / "upload"))
+UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "file" ))
+
 
 # 2) 확장자
 DOCUMENT_EXTENSION = os.getenv("DOCUMENT_EXTENSION", ".txt,.pdf,.docx,.doc,.csv")
