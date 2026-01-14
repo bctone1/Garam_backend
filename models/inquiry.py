@@ -19,10 +19,6 @@ class Inquiry(Base):
     __tablename__ = "inquiry"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-
-    # ✅ 최종 네이밍
-    # - customer_name -> business_name (NOT NULL)
-    # - company -> business_number (NULL)
     business_name = Column(String, nullable=False)
     business_number = Column(String, nullable=True)
 
@@ -96,7 +92,7 @@ class Inquiry(Base):
         Index("idx_inquiry_assignee_status", "assignee_admin_id", "status", "created_at"),
         Index("idx_inquiry_created", "created_at"),
         Index("idx_inquiry_type_created", "inquiry_type", "created_at"),
-        # 필요하면 검색용(선택)
+        # 필요하면 검색용
         Index("idx_inquiry_business_name_created", "business_name", "created_at"),
     )
 
