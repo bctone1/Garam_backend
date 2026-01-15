@@ -29,19 +29,44 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(debug=True, lifespan=lifespan)
 
+from typing import List
+from fastapi import WebSocket
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for ws in self.active_connections:
+            await ws.send_text(message)
+
+
+ws_manager = ConnectionManager()
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()  # 조건 없이 연결 허용
+    await ws_manager.connect(websocket)
+    print("🟢 WebSocket connected:", len(ws_manager.active_connections))
+
     try:
         while True:
-            data = await websocket.receive_text()  # 어떤 메시지도 수신
+            data = await websocket.receive_text()
             print(f"받은 메시지: {data}")
 
-            # 그대로 다시 보내기 (echo)
-            await websocket.send_text(f"echo: {data}")
+            # 🔥 모든 클라이언트에게 전송
+            await ws_manager.broadcast(f"알림: {data}")
 
     except WebSocketDisconnect:
-        print("클라이언트 연결 종료")
+        ws_manager.disconnect(websocket)
+        print("🔴 WebSocket disconnected:", len(ws_manager.active_connections))
 
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
