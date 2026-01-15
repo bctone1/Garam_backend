@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
 from sqlalchemy.orm import Session
 
 from database.session import get_db
@@ -13,9 +13,6 @@ from schemas.chat_history import (
     ChatSessionInsightResponse,
     ChatMessageInsightResponse,
     WordCloudResponse,
-    WordCloudQuery,
-    ChatSessionInsightListQuery,
-    ChatMessageInsightListQuery,
 )
 from crud import chat_history as crud
 from service import chat_history as svc
@@ -31,7 +28,7 @@ router = APIRouter()
 def list_sessions(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
-    status_: Optional[str] = Query(None, alias="status"),
+    status: Optional[str] = Query(None),  # success/failed
     channel: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     q: Optional[str] = Query(None),
@@ -43,7 +40,7 @@ def list_sessions(
         db,
         date_from=date_from,
         date_to=date_to,
-        status=status_,
+        status=status,
         channel=channel,
         category=category,
         q=q,
@@ -80,8 +77,7 @@ def count_sessions(
         channel=channel,
         category=category,
     )
-    success = total - failed
-    return {"total": total, "success": success, "failed": failed}
+    return {"total": total, "success": total - failed, "failed": failed}
 
 
 @router.get(
@@ -109,7 +105,7 @@ def list_questions(
         offset=offset,
         limit=limit,
     )
-    # 질문만
+    # 질문만 노출
     return [x for x in items if bool(getattr(x, "is_question", False))]
 
 
@@ -141,7 +137,7 @@ def wordcloud(
 
 @router.post(
     "/rebuild",
-    status_code=status.HTTP_202_ACCEPTED,
+    status_code=http_status.HTTP_202_ACCEPTED,
     response_model=Dict[str, Any],
     summary="대화기록: 기간 재집계(인사이트/키워드)",
 )
@@ -152,6 +148,4 @@ def rebuild(
 ):
     if date_from > date_to:
         raise HTTPException(status_code=400, detail="date_from must be <= date_to")
-
-    result = svc.rebuild_range(db, date_from=date_from, date_to=date_to)
-    return result
+    return svc.rebuild_range(db, date_from=date_from, date_to=date_to)
