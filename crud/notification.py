@@ -26,11 +26,11 @@ def _build_message(
     actor = actor_name or "관리자"
 
     if event_type == "inquiry_new":
-        return "새 문의 접수", f"{bn}에서 문의가 접수됐습니다."
+        return "새 문의 접수", f"{bn} 로 문의가 접수됐습니다."
     if event_type == "inquiry_assigned":
-        return "문의 할당", f"{actor}가 {bn} 문의가 할당됐습니다."
+        return "문의 할당", f"{actor}에서  {bn} 님의 문의가 할당됐습니다."
     if event_type == "inquiry_completed":
-        return "문의 완료", f"{actor}가 {bn} 문의를 완료 처리했습니다."
+        return "문의 완료", f"{actor} 에서 {bn} 문의를 처리했습니다."
     return "알림", f"{bn} 관련 알림이 도착했습니다."
 
 def _unread_count(db: Session, recipient_admin_id: int, event_type: Optional[EventType] = None) -> int:
@@ -86,7 +86,6 @@ def serialize_notification(n: Notification) -> Dict[str, Any]:
             else None
         ),
 
-        # ✅ UI용
         "title": title,
         "body": body,
         "deep_link": f"/inquiries/{n.inquiry_id}",

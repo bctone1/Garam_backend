@@ -17,7 +17,7 @@ from schemas.notification import (
     NotificationEventType,
 )
 
-router = APIRouter(prefix="/notifications", tags=["Notification"])
+router = APIRouter(prefix="/notifications", tags=["웹소켓 알림"])
 
 
 # 1) 알림 목록
