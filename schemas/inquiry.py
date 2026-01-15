@@ -91,7 +91,7 @@ class InquiryResponse(InquiryBase):
     assigned_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
-    attachments: List[InquiryAttachmentResponse] = Field(default_factory=list)
+    attachments: Optional[List[InquiryAttachmentResponse]] = None
 
     class Config:
         from_attributes = True
