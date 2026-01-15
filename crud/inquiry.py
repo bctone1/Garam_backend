@@ -146,12 +146,12 @@ def _build_notification_message(
     actor = actor_name or "관리자"
 
     if event_type == "inquiry_new":
-        return "새 문의 접수", f"{bn}에서 문의가 접수됐어."
+        return "새 문의 접수", f"{bn}에서 문의가 접수됐습니다."
     if event_type == "inquiry_assigned":
-        return "문의가 할당됐어", f"{actor}가 {bn} 문의를 너에게 할당했어."
+        return "문의 할당", f"{actor}가 {bn} 문의가  할당됐습니다."
     if event_type == "inquiry_completed":
-        return "문의 완료", f"{actor}가 {bn} 문의를 완료 처리했어."
-    return "알림", f"{bn} 관련 알림이 도착했어."
+        return "문의 완료", f"{actor}가 {bn} 문의를 완료 처리했습니다."
+    return "알림", f"{bn} 관련 알림 도착."
 
 
 def _publish_notification_created_sync(
