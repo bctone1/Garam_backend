@@ -15,7 +15,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import JSONB
 
 from database.base import Base
 
@@ -87,7 +87,7 @@ class ChatMessageInsight(Base):
     category = Column(String(64), nullable=True)
 
     # 키워드 리스트: ["용지", "주문", ...]
-    keywords = Column(JSON, nullable=True)
+    keywords = Column(JSONB, nullable=True)
 
     # 시간 필터를 join 없이 하려고 메시지 시각 복제 저장(권장)
     created_at = Column(DateTime(timezone=True), nullable=False)
