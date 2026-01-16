@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 
 ChatInsightStatus = Literal["success", "failed"]
+ChannelLiteral = Literal["web", "mobile"]
 
 
 # =========================
@@ -17,8 +18,9 @@ class ChatSessionInsightBase(BaseModel):
     session_id: int
     started_at: datetime
 
-    channel: Optional[str] = None
+    channel: Optional[ChannelLiteral] = None
     category: Optional[str] = None
+    quick_category_id: Optional[int] = None
 
     status: ChatInsightStatus = "success"
     first_question: Optional[str] = None
@@ -32,8 +34,10 @@ class ChatSessionInsightCreate(ChatSessionInsightBase):
 
 class ChatSessionInsightUpdate(BaseModel):
     started_at: Optional[datetime] = None
-    channel: Optional[str] = None
+    channel: Optional[ChannelLiteral] = None
     category: Optional[str] = None
+    quick_category_id: Optional[int] = None
+
     status: Optional[ChatInsightStatus] = None
     first_question: Optional[str] = None
     question_count: Optional[int] = None
@@ -86,8 +90,8 @@ class ChatKeywordDailyBase(BaseModel):
     keyword: str
     count: int
 
-    channel: Optional[str] = None
-    category: Optional[str] = None
+    channel: Optional[ChannelLiteral] = None
+    quick_category_id: Optional[int] = None
 
 
 class ChatKeywordDailyUpsert(ChatKeywordDailyBase):
@@ -118,8 +122,9 @@ class ChatHistoryRange(BaseModel):
 
 class ChatSessionInsightListQuery(ChatHistoryRange):
     status: Optional[ChatInsightStatus] = None
-    channel: Optional[str] = None
+    channel: Optional[ChannelLiteral] = None
     category: Optional[str] = None
+    quick_category_id: Optional[int] = None
 
     q: Optional[str] = None  # first_question/preview 등 부분검색용(선택)
     offset: int = 0
@@ -128,7 +133,7 @@ class ChatSessionInsightListQuery(ChatHistoryRange):
 
 class ChatMessageInsightListQuery(ChatHistoryRange):
     session_id: Optional[int] = None
-    channel: Optional[str] = None
+    channel: Optional[ChannelLiteral] = None
     category: Optional[str] = None
 
     offset: int = 0
@@ -141,8 +146,8 @@ class KeywordTopItem(BaseModel):
 
 
 class WordCloudQuery(ChatHistoryRange):
-    channel: Optional[str] = None
-    category: Optional[str] = None
+    channel: Optional[ChannelLiteral] = None
+    quick_category_id: Optional[int] = None
     top_n: int = 100
 
 

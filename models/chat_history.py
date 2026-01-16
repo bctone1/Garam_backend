@@ -37,7 +37,14 @@ class ChatSessionInsight(Base):
     started_at = Column(DateTime(timezone=True), nullable=False)
 
     channel = Column(String(32), nullable=True)   # web/mobile/admin 등
-    category = Column(String(64), nullable=True)  # pos/kiosk/terminal/install 등
+    category = Column(String(64), nullable=True)  # 캐시용(표시용) name (선택)
+
+    # quick_category FK (권장: name 변경에도 정합성 유지)
+    quick_category_id = Column(
+        BigInteger,
+        ForeignKey("quick_category.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     status = Column(String(16), nullable=False, server_default="success")  # success/failed
     first_question = Column(Text, nullable=True)
@@ -49,6 +56,7 @@ class ChatSessionInsight(Base):
 
     # 관계(선택)
     session = relationship("ChatSession", backref="insight", passive_deletes=True)
+    quick_category = relationship("QuickCategory", passive_deletes=True)
 
     __table_args__ = (
         CheckConstraint("status IN ('success','failed')", name="chk_chat_s_insight_status"),
@@ -57,6 +65,7 @@ class ChatSessionInsight(Base):
         Index("idx_chat_s_insight_status_started_at", "status", "started_at"),
         Index("idx_chat_s_insight_category_started_at", "category", "started_at"),
         Index("idx_chat_s_insight_channel_started_at", "channel", "started_at"),
+        Index("idx_chat_s_insight_qc_started_at", "quick_category_id", "started_at"),
     )
 
 
@@ -116,16 +125,22 @@ class ChatKeywordDaily(Base):
     count = Column(Integer, nullable=False, server_default="0")
 
     channel = Column(String(32), nullable=True)
-    category = Column(String(64), nullable=True)
+
+    # quick_category FK (category 문자열 컬럼 제거)
+    quick_category_id = Column(
+        BigInteger,
+        ForeignKey("quick_category.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
         CheckConstraint("count >= 0", name="chk_chat_kw_daily_count_nonneg"),
-        UniqueConstraint("dt", "keyword", "channel", "category", name="uq_chat_kw_daily"),
+        UniqueConstraint("dt", "keyword", "channel", "quick_category_id", name="uq_chat_kw_daily"),
         Index("idx_chat_kw_daily_dt", "dt"),
         Index("idx_chat_kw_daily_keyword", "keyword"),
-        Index("idx_chat_kw_daily_dt_category", "dt", "category"),
+        Index("idx_chat_kw_daily_dt_qc", "dt", "quick_category_id"),
         Index("idx_chat_kw_daily_dt_channel", "dt", "channel"),
     )
 

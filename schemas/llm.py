@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 # literals
 # =========================
 StyleLiteral = Literal["professional", "friendly", "concise"]
+ChannelLiteral = Literal["web", "mobile"]
 
 
 # =========================
@@ -45,6 +46,9 @@ class ChatQARequest(PolicyFlags):
 
     style: Optional[StyleLiteral] = None
     few_shot_profile: Optional[str] = Field(default=None, min_length=1, max_length=200)
+
+    # 운영 규칙: web | mobile 고정 코드
+    channel: Optional[ChannelLiteral] = Field(default=None)
 
 
 class QASource(BaseModel):

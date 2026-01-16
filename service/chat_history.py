@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timezone, timedelta, time
 from typing import Optional, List, Dict, Any, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import select, text as sa_text
 from sqlalchemy.orm import Session
 
 from models.chat import ChatSession, Message
@@ -195,6 +195,23 @@ def _is_failed_assistant_message(msg: Message) -> bool:
 
 
 # =========================
+# QuickCategory helpers
+# =========================
+def _load_quick_category_name_map(db: Session) -> Dict[str, int]:
+    """
+    quick_category.name(lower) -> id
+    """
+    rows = db.execute(sa_text("SELECT id, name FROM quick_category")).mappings().all()
+    out: Dict[str, int] = {}
+    for r in rows:
+        name = str(r.get("name") or "").strip().lower()
+        if not name:
+            continue
+        out[name] = int(r["id"])
+    return out
+
+
+# =========================
 # Build / rebuild
 # =========================
 def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, Any]:
@@ -222,8 +239,14 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
     for m in msgs:
         by_session[int(m.session_id)].append(m)
 
+    # quick_category name->id 맵 + etc_id
+    qc_name_map = _load_quick_category_name_map(db)
+    etc_id: Optional[int] = qc_name_map.get("etc")
+
     # 1) session_insight 업데이트
     updated_sessions = 0
+    session_insight_cache: Dict[int, Any] = {}
+
     for s in sessions:
         sid = int(s.id)
         mlist = by_session.get(sid, [])
@@ -236,7 +259,7 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
         status = "failed" if failed_msg else "success"
         failed_reason = (failed_msg.content[:200] if failed_msg else None)
 
-        crud.upsert_session_insight(
+        si = crud.upsert_session_insight(
             db,
             session_id=sid,
             started_at=s.created_at,
@@ -244,7 +267,19 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
             first_question=(first_q[:300] if first_q else None),
             question_count=qcount,
             failed_reason=failed_reason,
+            # category는 캐시용이므로 rebuild에서 굳이 덮어쓰지 않음
         )
+
+        # quick_category_id가 비어 있으면: (category 캐시가 있으면 매핑) -> 없으면 etc
+        if getattr(si, "quick_category_id", None) is None:
+            cat = getattr(si, "category", None)
+            mapped = qc_name_map.get(str(cat).strip().lower()) if cat else None
+            if mapped is not None:
+                si.quick_category_id = int(mapped)
+            elif etc_id is not None:
+                si.quick_category_id = int(etc_id)
+
+        session_insight_cache[sid] = si
         updated_sessions += 1
 
     # 2) message_insight 업데이트 + 키워드 메모(집계용)
@@ -267,27 +302,36 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
         )
         updated_messages += 1
 
-    # 3) keyword_daily 재집계
+    # 3) keyword_daily 재집계 (category 제거 -> quick_category_id 사용)
     crud.delete_keyword_daily_range(db, date_from=date_from, date_to=date_to)
 
-    acc: Dict[Tuple[date, str, Optional[str], Optional[str]], int] = defaultdict(int)
-    insight_map = {int(s.id): crud.get_session_insight(db, int(s.id)) for s in sessions}
+    acc: Dict[Tuple[date, str, Optional[str], Optional[int]], int] = defaultdict(int)
 
     for m in msgs:
         if m.role != "user":
             continue
 
         dt = m.created_at.astimezone(timezone.utc).date()
-        si = insight_map.get(int(m.session_id))
+        si = session_insight_cache.get(int(m.session_id))
         ch = getattr(si, "channel", None) if si else None
-        cat = getattr(si, "category", None) if si else None
+
+        qc_id = getattr(si, "quick_category_id", None) if si else None
+        if qc_id is None and etc_id is not None:
+            qc_id = int(etc_id)
 
         kws = msg_keywords.get(int(m.id), [])
         for kw in kws:
-            acc[(dt, str(kw), ch, cat)] += 1
+            acc[(dt, str(kw), ch, (int(qc_id) if qc_id is not None else None))] += 1
 
-    for (dt, kw, ch, cat), c in acc.items():
-        crud.upsert_keyword_daily_set(db, dt=dt, keyword=kw, count=c, channel=ch, category=cat)
+    for (dt, kw, ch, qc_id), c in acc.items():
+        crud.upsert_keyword_daily_set(
+            db,
+            dt=dt,
+            keyword=kw,
+            count=c,
+            channel=ch,
+            quick_category_id=qc_id,
+        )
 
     db.commit()
     return {"sessions": updated_sessions, "messages": updated_messages, "keywords": len(acc)}

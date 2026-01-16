@@ -10,8 +10,13 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except:
+        db.rollback()
+        raise
     finally:
         db.close()
+
 
 def get_db_connection():
     return psycopg2.connect(

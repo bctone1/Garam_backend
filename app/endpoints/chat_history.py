@@ -30,7 +30,9 @@ def list_sessions(
     date_to: Optional[date] = Query(None),
     status: Optional[str] = Query(None),  # success/failed
     channel: Optional[str] = Query(None),
+    # 캐시 필드
     category: Optional[str] = Query(None),
+    quick_category_id: Optional[int] = Query(None, ge=1),
     q: Optional[str] = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -43,6 +45,7 @@ def list_sessions(
         status=status,
         channel=channel,
         category=category,
+        quick_category_id=quick_category_id,
         q=q,
         offset=offset,
         limit=limit,
@@ -59,6 +62,7 @@ def count_sessions(
     date_to: Optional[date] = Query(None),
     channel: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
+    quick_category_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
     total = crud.count_session_insights(
@@ -68,6 +72,7 @@ def count_sessions(
         status=None,
         channel=channel,
         category=category,
+        quick_category_id=quick_category_id,
     )
     failed = crud.count_session_insights(
         db,
@@ -76,6 +81,7 @@ def count_sessions(
         status="failed",
         channel=channel,
         category=category,
+        quick_category_id=quick_category_id,
     )
     return {"total": total, "success": total - failed, "failed": failed}
 
@@ -118,7 +124,7 @@ def wordcloud(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     channel: Optional[str] = Query(None),
-    category: Optional[str] = Query(None),
+    quick_category_id: Optional[int] = Query(None, ge=1),
     top_n: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
@@ -127,7 +133,7 @@ def wordcloud(
         date_from=date_from,
         date_to=date_to,
         channel=channel,
-        category=category,
+        quick_category_id=quick_category_id,
         top_n=top_n,
     )
     return WordCloudResponse(

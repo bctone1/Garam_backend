@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Optional, List, Sequence, Tuple
+from typing import Optional, List, Tuple
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -67,7 +67,8 @@ def upsert_session_insight(
     session_id: int,
     started_at: Optional[datetime] = None,
     channel: Optional[str] = None,
-    category: Optional[str] = None,
+    category: Optional[str] = None,  # 캐시용 name (선택)
+    quick_category_id: Optional[int] = None,  # FK (권장)
     status: Optional[str] = None,  # "success" | "failed"
     first_question: Optional[str] = None,
     question_count: Optional[int] = None,
@@ -84,6 +85,7 @@ def upsert_session_insight(
             started_at=started_at or sess.created_at,
             channel=channel,
             category=category,
+            quick_category_id=quick_category_id,
             status=status or "success",
             first_question=first_question,
             question_count=question_count or 0,
@@ -99,6 +101,8 @@ def upsert_session_insight(
         obj.channel = channel
     if category is not None:
         obj.category = category
+    if quick_category_id is not None:
+        obj.quick_category_id = int(quick_category_id)
     if status is not None:
         obj.status = status
     if first_question is not None:
@@ -119,7 +123,8 @@ def list_session_insights(
     date_to: Optional[date] = None,
     status: Optional[str] = None,
     channel: Optional[str] = None,
-    category: Optional[str] = None,
+    category: Optional[str] = None,  # 캐시 name 필터(기존 호환)
+    quick_category_id: Optional[int] = None,  # FK 필터(권장)
     q: Optional[str] = None,
     offset: int = 0,
     limit: int = 50,
@@ -138,6 +143,8 @@ def list_session_insights(
         stmt = stmt.where(ChatSessionInsight.channel == channel)
     if category:
         stmt = stmt.where(ChatSessionInsight.category == category)
+    if quick_category_id is not None:
+        stmt = stmt.where(ChatSessionInsight.quick_category_id == int(quick_category_id))
     if q:
         like = f"%{q}%"
         stmt = stmt.where(
@@ -155,7 +162,8 @@ def count_session_insights(
     date_to: Optional[date] = None,
     status: Optional[str] = None,
     channel: Optional[str] = None,
-    category: Optional[str] = None,
+    category: Optional[str] = None,  # 캐시 name 필터(기존 호환)
+    quick_category_id: Optional[int] = None,  # FK 필터(권장)
 ) -> int:
     stmt = select(func.count()).select_from(ChatSessionInsight)
 
@@ -171,6 +179,8 @@ def count_session_insights(
         stmt = stmt.where(ChatSessionInsight.channel == channel)
     if category:
         stmt = stmt.where(ChatSessionInsight.category == category)
+    if quick_category_id is not None:
+        stmt = stmt.where(ChatSessionInsight.quick_category_id == int(quick_category_id))
 
     return int(db.execute(stmt).scalar_one())
 
@@ -300,7 +310,7 @@ def list_keyword_daily(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     channel: Optional[str] = None,
-    category: Optional[str] = None,
+    quick_category_id: Optional[int] = None,
     top_n: int = 100,
 ) -> List[ChatKeywordDaily]:
     stmt = select(ChatKeywordDaily)
@@ -312,8 +322,8 @@ def list_keyword_daily(
 
     if channel:
         stmt = stmt.where(ChatKeywordDaily.channel == channel)
-    if category:
-        stmt = stmt.where(ChatKeywordDaily.category == category)
+    if quick_category_id is not None:
+        stmt = stmt.where(ChatKeywordDaily.quick_category_id == int(quick_category_id))
 
     stmt = stmt.order_by(ChatKeywordDaily.count.desc(), ChatKeywordDaily.keyword.asc()).limit(int(top_n))
     return db.execute(stmt).scalars().all()
@@ -326,23 +336,27 @@ def upsert_keyword_daily_set(
     keyword: str,
     count: int,
     channel: Optional[str] = None,
-    category: Optional[str] = None,
+    quick_category_id: Optional[int] = None,
 ) -> None:
     """
-    (dt, keyword, channel, category) 유니크키 기준으로 count를 '설정' (재빌드/ETL에 적합)
+    (dt, keyword, channel, quick_category_id) 유니크키 기준으로 count를 '설정' (재빌드/ETL에 적합)
     """
-    stmt = pg_insert(ChatKeywordDaily).values(
-        dt=dt,
-        keyword=keyword,
-        count=int(count),
-        channel=channel,
-        category=category,
-    ).on_conflict_do_update(
-        constraint="uq_chat_kw_daily",
-        set_={
-            "count": int(count),
-            "updated_at": func.now(),
-        },
+    stmt = (
+        pg_insert(ChatKeywordDaily)
+        .values(
+            dt=dt,
+            keyword=keyword,
+            count=int(count),
+            channel=channel,
+            quick_category_id=quick_category_id,
+        )
+        .on_conflict_do_update(
+            constraint="uq_chat_kw_daily",
+            set_={
+                "count": int(count),
+                "updated_at": func.now(),
+            },
+        )
     )
     db.execute(stmt)
 
@@ -354,24 +368,28 @@ def upsert_keyword_daily_add(
     keyword: str,
     delta: int,
     channel: Optional[str] = None,
-    category: Optional[str] = None,
+    quick_category_id: Optional[int] = None,
 ) -> None:
     """
-    (dt, keyword, channel, category) 유니크키 기준으로 count를 '증가' (실시간 누적에 적합)
+    (dt, keyword, channel, quick_category_id) 유니크키 기준으로 count를 '증가' (실시간 누적에 적합)
     """
     delta_i = int(delta)
-    stmt = pg_insert(ChatKeywordDaily).values(
-        dt=dt,
-        keyword=keyword,
-        count=delta_i,
-        channel=channel,
-        category=category,
-    ).on_conflict_do_update(
-        constraint="uq_chat_kw_daily",
-        set_={
-            "count": ChatKeywordDaily.count + delta_i,
-            "updated_at": func.now(),
-        },
+    stmt = (
+        pg_insert(ChatKeywordDaily)
+        .values(
+            dt=dt,
+            keyword=keyword,
+            count=delta_i,
+            channel=channel,
+            quick_category_id=quick_category_id,
+        )
+        .on_conflict_do_update(
+            constraint="uq_chat_kw_daily",
+            set_={
+                "count": ChatKeywordDaily.count + delta_i,
+                "updated_at": func.now(),
+            },
+        )
     )
     db.execute(stmt)
 
@@ -382,7 +400,7 @@ def delete_keyword_daily_range(
     date_from: date,
     date_to: date,
     channel: Optional[str] = None,
-    category: Optional[str] = None,
+    quick_category_id: Optional[int] = None,
 ) -> int:
     """
     기간 재집계 전에 기존 집계 제거용.
@@ -390,8 +408,8 @@ def delete_keyword_daily_range(
     q = db.query(ChatKeywordDaily).filter(ChatKeywordDaily.dt >= date_from, ChatKeywordDaily.dt <= date_to)
     if channel:
         q = q.filter(ChatKeywordDaily.channel == channel)
-    if category:
-        q = q.filter(ChatKeywordDaily.category == category)
+    if quick_category_id is not None:
+        q = q.filter(ChatKeywordDaily.quick_category_id == int(quick_category_id))
     n = q.delete(synchronize_session=False)
     return int(n)
 
