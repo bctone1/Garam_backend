@@ -5,7 +5,7 @@ import re
 import logging
 from collections import Counter, defaultdict
 from datetime import date, datetime, timezone, timedelta, time
-from typing import Optional, List, Dict, Any, Iterable, Tuple
+from typing import Optional, List, Dict, Any, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,7 +17,7 @@ log = logging.getLogger("chat_history")
 
 
 # =========================
-# Keyword extraction (v1: simple)
+# Keyword extraction (v2: mecab-ko + fallback)
 # =========================
 _STOPWORDS_KO = {
     "그리고", "그래서", "근데", "그런데", "또", "또는", "때문", "때문에",
@@ -28,25 +28,147 @@ _STOPWORDS_KO = {
 }
 
 _TOKEN_RE = re.compile(r"[가-힣A-Za-z0-9]+")
+_HANGUL_RE = re.compile(r"^[가-힣]+$")
+
+_MECAB_KIND: Optional[str] = None
+_MECAB_OBJ: Any = None
+
+
+def _init_mecab() -> None:
+    global _MECAB_KIND, _MECAB_OBJ
+    if _MECAB_OBJ is not None:
+        return
+
+    try:
+        import MeCab  # type: ignore
+        _MECAB_OBJ = MeCab.Tagger()
+        _MECAB_KIND = "mecab-python3"
+        log.info("mecab enabled: mecab-python3")
+        return
+    except Exception:
+        pass
+
+    try:
+        from konlpy.tag import Mecab  # type: ignore
+        _MECAB_OBJ = Mecab()
+        _MECAB_KIND = "konlpy"
+        log.info("mecab enabled: konlpy.tag.Mecab")
+        return
+    except Exception:
+        _MECAB_OBJ = None
+        _MECAB_KIND = None
+        log.warning("mecab not available; fallback to simple keyword extraction")
+
+
+_init_mecab()
+
+
+def _mecab_pos(text: str) -> List[Tuple[str, str]]:
+    if not _MECAB_OBJ or not _MECAB_KIND:
+        return []
+
+    if _MECAB_KIND == "konlpy":
+        return list(_MECAB_OBJ.pos(text))  # type: ignore[attr-defined]
+
+    try:
+        node = _MECAB_OBJ.parseToNode(text)  # type: ignore[attr-defined]
+        out: List[Tuple[str, str]] = []
+        while node:
+            surf = node.surface or ""
+            feat = node.feature or ""
+            pos = feat.split(",", 1)[0] if feat else ""
+            if surf:
+                out.append((surf, pos))
+            node = node.next
+        return out
+    except Exception:
+        return []
 
 
 def extract_keywords_simple(text: str, *, max_keywords: int = 10) -> List[str]:
-    """
-    - v10.html이 프론트에서 하던 '간단 키워드' 방식과 비슷한 서버 버전
-    - 형태소 분석/LLM 키워드는 v2에서 교체
-    """
     if not text:
         return []
-
     tokens = _TOKEN_RE.findall(text)
     tokens = [t.strip().lower() for t in tokens if t.strip()]
     tokens = [t for t in tokens if len(t) >= 2 and t not in _STOPWORDS_KO]
-
-    # 너무 숫자만인 토큰 제거(예: 01, 1234 등)
     tokens = [t for t in tokens if not t.isdigit()]
+    cnt = Counter(tokens)
+    return [w for (w, _) in cnt.most_common(max_keywords)]
+
+
+def _add_compound(out_tokens: List[str], noun_seq: List[str]) -> None:
+    clean = [n for n in noun_seq if n and n not in _STOPWORDS_KO]
+    if len(clean) < 2:
+        return
+
+    max_n = min(3, len(clean))
+    for n in range(2, max_n + 1):
+        for i in range(0, len(clean) - n + 1):
+            phrase = " ".join(clean[i : i + n]).strip()
+            if phrase and len(phrase) >= 2:
+                out_tokens.append(phrase)
+
+
+def extract_keywords_mecab(text: str, *, max_keywords: int = 10) -> List[str]:
+    if not text:
+        return []
+
+    text = text.strip()
+    if len(text) > 5000:
+        text = text[:5000]
+
+    pos_list = _mecab_pos(text)
+    if not pos_list:
+        return extract_keywords_simple(text, max_keywords=max_keywords)
+
+    allowed = {"NNG", "NNP", "SL", "SN"}
+    tokens: List[str] = []
+
+    for surf, pos in pos_list:
+        if pos not in allowed:
+            continue
+
+        tok = surf.strip()
+        if not tok:
+            continue
+
+        if pos in {"SL", "SN"}:
+            tok = tok.lower()
+
+        if tok.isdigit():
+            continue
+
+        if _HANGUL_RE.match(tok):
+            # 한글은 1글자도 의미 있을 수 있어 허용
+            pass
+        else:
+            if len(tok) < 2:
+                continue
+
+        if tok in _STOPWORDS_KO:
+            continue
+
+        tokens.append(tok)
+
+    noun_buf: List[str] = []
+    for surf, pos in pos_list:
+        if pos in {"NNG", "NNP"} and surf.strip():
+            noun_buf.append(surf.strip())
+            continue
+        if noun_buf:
+            _add_compound(tokens, noun_buf)
+            noun_buf = []
+    if noun_buf:
+        _add_compound(tokens, noun_buf)
 
     cnt = Counter(tokens)
     return [w for (w, _) in cnt.most_common(max_keywords)]
+
+
+def extract_keywords(text: str, *, max_keywords: int = 10) -> List[str]:
+    if _MECAB_OBJ:
+        return extract_keywords_mecab(text, max_keywords=max_keywords)
+    return extract_keywords_simple(text, max_keywords=max_keywords)
 
 
 # =========================
@@ -65,7 +187,6 @@ def _is_failed_assistant_message(msg: Message) -> bool:
         return False
 
     ex = (msg.extra_data or {}) if isinstance(msg.extra_data, dict) else {}
-    # 우선: 시스템/체인에서 실패 플래그를 넣었다면 그걸 신뢰
     if bool(ex.get("no_context")) or bool(ex.get("need_clarify")) or bool(ex.get("retrieval_failed")):
         return True
 
@@ -77,13 +198,6 @@ def _is_failed_assistant_message(msg: Message) -> bool:
 # Build / rebuild
 # =========================
 def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, Any]:
-    """
-    기간 내 chat_session / message를 훑어서
-    - chat_session_insight 업데이트
-    - chat_message_insight(질문/키워드) 업데이트
-    - chat_keyword_daily 재집계
-    """
-    # 1) 기간 세션 조회(UTC 기준, [from, to+1) )
     dt_from = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
     dt_to_excl = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
 
@@ -96,22 +210,19 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
 
     session_ids = [int(s.id) for s in sessions]
     if not session_ids:
-        # 키워드 집계도 지울 필요가 있으면 여기서 delete_keyword_daily_range 호출
         crud.delete_keyword_daily_range(db, date_from=date_from, date_to=date_to)
         db.commit()
         return {"sessions": 0, "messages": 0, "keywords": 0}
 
-    # 2) 세션별 메시지 로드(해당 세션의 모든 메시지)
     msgs: List[Message] = db.execute(
         select(Message).where(Message.session_id.in_(session_ids)).order_by(Message.created_at.asc())
     ).scalars().all()
 
-    # 세션별 그룹
     by_session: Dict[int, List[Message]] = defaultdict(list)
     for m in msgs:
         by_session[int(m.session_id)].append(m)
 
-    # 3) session_insight 업데이트
+    # 1) session_insight 업데이트
     updated_sessions = 0
     for s in sessions:
         sid = int(s.id)
@@ -133,16 +244,19 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
             first_question=(first_q[:300] if first_q else None),
             question_count=qcount,
             failed_reason=failed_reason,
-            # channel/category는 v1에선 자동 추정 안 함(원하면 v2에서 추가)
         )
         updated_sessions += 1
 
-    # 4) message_insight 업데이트(질문 + 키워드)
+    # 2) message_insight 업데이트 + 키워드 메모(집계용)
     updated_messages = 0
+    msg_keywords: Dict[int, List[str]] = {}
+
     for m in msgs:
         if m.role != "user":
             continue
-        kws = extract_keywords_simple(m.content or "")
+        kws = extract_keywords(m.content or "", max_keywords=10)
+        msg_keywords[int(m.id)] = kws
+
         crud.upsert_message_insight(
             db,
             message_id=int(m.id),
@@ -153,32 +267,24 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
         )
         updated_messages += 1
 
-    # 5) keyword_daily 재집계: 기간 내 user 메시지의 keywords 기반
-    #    - 먼저 기존 기간 집계 삭제 후, 새로 set/upsert
+    # 3) keyword_daily 재집계
     crud.delete_keyword_daily_range(db, date_from=date_from, date_to=date_to)
 
-    # (dt, keyword, channel, category) -> count
     acc: Dict[Tuple[date, str, Optional[str], Optional[str]], int] = defaultdict(int)
-
-    # session insight 캐시(채널/카테고리)
     insight_map = {int(s.id): crud.get_session_insight(db, int(s.id)) for s in sessions}
 
     for m in msgs:
         if m.role != "user":
             continue
-        mi = crud.get_message_insight(db, int(m.id))  # 방금 upsert 했으니 존재
-        if not mi:
-            continue
 
         dt = m.created_at.astimezone(timezone.utc).date()
         si = insight_map.get(int(m.session_id))
         ch = getattr(si, "channel", None) if si else None
-        cat = getattr(mi, "category", None) or (getattr(si, "category", None) if si else None)
+        cat = getattr(si, "category", None) if si else None
 
-        kws = (getattr(mi, "keywords", None) or [])
+        kws = msg_keywords.get(int(m.id), [])
         for kw in kws:
-            key = (dt, str(kw), ch, cat)
-            acc[key] += 1
+            acc[(dt, str(kw), ch, cat)] += 1
 
     for (dt, kw, ch, cat), c in acc.items():
         crud.upsert_keyword_daily_set(db, dt=dt, keyword=kw, count=c, channel=ch, category=cat)

@@ -17,7 +17,7 @@ from schemas.chat_history import (
 from crud import chat_history as crud
 from service import chat_history as svc
 
-router = APIRouter()
+router = APIRouter(prefix="/chat-history", tags=["대화 기록"])
 
 
 @router.get(
