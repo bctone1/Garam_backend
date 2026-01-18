@@ -156,19 +156,18 @@ def make_qa_chain(
 
     system_txt = build_system_prompt(style=style_key, **(policy_flags or {}))
 
-    # Output format guidance + link enforcement rules
+    # 출력 형식 지침 + 링크 강제 규칙 추가
     system_txt = (
         system_txt
-        + "\n\nAdditional instructions:\n"
-        + "- Write answers in Markdown. (You may use **bold**, lists (-), and numbered lists (1.).)\n"
-        + "- Never use code blocks. (No ``` or ```json under any circumstance.)\n"
-        + "- Do not output JSON-only. Respond in normal sentences with lists.\n"
-        + "- Ground your answer strictly in the provided context.\n"
-        + "- Respond in the same language as the question (Korean/English/Chinese/Japanese).\n"
-        + "- Do not switch output language based on the context language; follow the user's question language only.\n"
-        + "- If the context is insufficient, do not end with 'no information'; switch to a clarifying question.\n"
-        + "- If force_clarify is True, output only a clarifying question instead of an answer.\n"
-        + "- Use only the URLs in the [SOURCES] section for download/external links.\n"
+        + "\n\n추가 지침:\n"
+        + "- 답변은 마크다운으로 작성해. (굵게(**), 목록(-), 번호(1.) 사용 가능)\n"
+        + "- 코드블록은 절대 사용하지 마. (``` 또는 ```json 포함 전부 금지)\n"
+        + "- JSON만 출력하는 형식은 금지야. 일반 문장 + 목록 형태로 답해.\n"
+        + "- 제공된 컨텍스트에 근거해서만 답해\n"
+        + "- 질문언어(한국어 / 영어 / 중국어 / 일본어)에 맞게 답변하기\n"
+        + "- 컨텍스트 근거가 부족하면 '없음'으로 끝내지 말고, 필요한 정보를 물어보는 확인 질문(clarify)으로 전환해.\n"
+        + "- force_clarify가 True면 답변 대신 확인 질문만 해.\n"
+        + "- 다운로드/외부 링크는 컨텍스트의 [SOURCES] 섹션에 있는 URL만 그대로 사용해.\n"
     )
 
     #  few-shot 로드(없으면 조용히 스킵)
@@ -302,11 +301,11 @@ def make_qa_chain(
     messages.append(
         (
             "human",
-            "Refer to the following context.\n"
-            "[Context Start]\n{context}\n[Context End]\n\n"
-            "Question: {question}\n"
+            "다음 컨텍스트를 참고해.\n"
+            "[컨텍스트 시작]\n{context}\n[컨텍스트 끝]\n\n"
+            "질문: {question}\n"
             "force_clarify: {force_clarify}\n\n"
-            "Output rules: Markdown OK / code blocks (``` ) forbidden / JSON-only forbidden / answer in the question language (Korean/English/Chinese/Japanese)\n",
+            "출력 규칙: 마크다운 OK / 코드블록( ``` ) 금지 / JSON-only 금지/질문언어(한국어/영어/중국어/일본어)에 맞게 답변하기\n",
         )
     )
 

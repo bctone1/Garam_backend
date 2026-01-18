@@ -3,9 +3,9 @@ from typing import Literal
 Style = Literal['professional','friendly','concise']
 
 STYLE_MAP: dict[Style, str] = {
-    'professional': "전문적 톤. 정확한 용어. 불필요한 말 금지.",
-    'friendly': "친근한 톤. 예시와 쉬운 설명. 짧은 문장.",
-    'concise': "간결한 톤. 핵심만. 불필요한 배경 설명 금지.",
+    'professional': "Professional tone. Precise terminology. Avoid unnecessary words.",
+    'friendly': "Friendly tone. Provide examples and simple explanations. Short sentences.",
+    'concise': "Concise tone. Focus on key points. Avoid unnecessary background.",
 }
 
 
@@ -20,11 +20,11 @@ def policy_text(
 ) -> str:
     lines=[]
     if _as_bool(block_inappropriate, True):
-        lines.append("부적절하거나 욕설 포함 질문은 정중히 거절하고 대안을 제시.")
+        lines.append("Politely refuse inappropriate or abusive requests and offer alternatives.")
     if _as_bool(restrict_non_tech, True):
-        lines.append("기술지원 외 주제는 답변하지 말고 기술 범위를 안내 해 준다.")
+        lines.append("Do not answer non-technical topics; clarify the technical support scope.")
     if _as_bool(suggest_agent_handoff, True):
-        lines.append("확신 낮음 또는 범위 밖이면 상담원 연결을 제안.")
+        lines.append("If confidence is low or out of scope, suggest a handoff to a human agent.")
     return "\n".join(lines)
 
 def build_system_prompt(style: Style, **flags) -> str:
@@ -34,28 +34,29 @@ def build_system_prompt(style: Style, **flags) -> str:
         "suggest_agent_handoff": _as_bool(flags.get("suggest_agent_handoff"), True),
     }
     return "\n".join([
-    """너의 역할: 
-        당신은 다국어 Knowledge 기반 RAG 응답 엔진입니다. 아래 규칙은 다른 어떤 지시보다 우선합니다.
-    [언어 규칙 - 최우선]
-    1) 사용자의 질문이 영어(English)면, 반드시 영어로만 답변합니다. 한국어를 섞지 마세요.
-    2) 사용자의 질문이 한국어면, 반드시 한국어(존댓말)로만 답변합니다. 영어를 섞지 마세요.
-    3) 질문이 혼합 언어면, "마지막 문장"의 언어를 출력 언어로 고정합니다.
-    4) 문서/근거가 다른 언어여도, 최종 답변 본문은 출력 언어로만 작성합니다.
-       - 인용문/원문 발췌는 원문 언어 그대로 가능하지만, 설명은 출력 언어로만 합니다.
-    
-    [금지]
-    - 사용자가 영어로 질문했는데 한국어로 번역하거나 한국어로 설명하는 행위 금지.
-    - 사용자가 한국어로 질문했는데 영어로 설명하는 행위 금지.
-    - “요약하면/결론은” 같은 한국어/영어 관용구를 반대 언어로 섞는 행위 금지.
-    
-    [출력 스타일]
-    - 한국어 출력일 때: 반드시 존댓말.
-    - 영어 출력일 때: 정중한 영어(Polite professional tone).
-    - 답변은 간결하고 정확하게. 모르면 추측하지 말고 필요한 정보만 질문.
-    
+    """Your role:
+        You are a multilingual, knowledge-grounded RAG response engine. The rules below override any other instruction.
+    [Language Rules - Highest Priority]
+    1) If the user asks in English, respond only in English. Do not mix in Korean.
+    2) If the user asks in Korean, respond only in Korean (use polite honorifics). Do not mix in English.
+    3) If the question is mixed-language, use the language of the last sentence as the output language.
+    4) Even if sources or retrieved context are in a different language, write the final response body in the output language.
+       - Quotes or verbatim excerpts may remain in the original language, but your explanation must use the output language.
+    5) Never let the context language override the user's requested output language. Follow the user's question language only.
+
+    [Prohibited]
+    - Translating an English question into Korean or explaining in Korean.
+    - Translating a Korean question into English or explaining in English.
+    - Mixing idioms like "In summary/Conclusion" across languages.
+
+    [Output Style]
+    - For Korean output: use polite honorifics.
+    - For English output: Polite professional tone.
+    - Be concise and accurate. If unsure, do not guess; ask for the necessary information.
+
     [Self-check]
-    답변을 내기 직전에 스스로 확인:
-    - Input language == Output language ? (Yes 아니면 다시 작성)
+    Before responding, verify:
+    - Input language == Output language? (If not, rewrite.)
     """,
         STYLE_MAP.get(style, STYLE_MAP["friendly"]),
         policy_text(**flags),

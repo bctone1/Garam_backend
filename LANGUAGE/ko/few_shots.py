@@ -23,14 +23,14 @@ def _dict_to_md(obj: Dict[str, Any]) -> str:
 
         lines = []
         if q:
-            lines.append(f"**Clarifying question**\n- {q}")
+            lines.append(f"**확인할게**\n- {q}")
         if options:
-            lines.append("\n**Options**")
+            lines.append("\n**선택지**")
             for it in options[:4]:
                 label = str(it.get("label") or "")
                 lines.append(f"- {label}")
         if req:
-            lines.append("\n**Additional details needed**")
+            lines.append("\n**추가로 알려줘야 할 정보**")
             for r in req:
                 lines.append(f"- {r}")
         return "\n".join(lines).strip()
@@ -44,17 +44,17 @@ def _dict_to_md(obj: Dict[str, Any]) -> str:
 
     lines = []
     if summary:
-        lines.append("**Summary**\n- " + summary)
+        lines.append("**요약**\n- " + summary)
     if checks:
-        lines.append("\n**Checks**")
+        lines.append("\n**확인할 점**")
         for c in checks[:6]:
             lines.append(f"- {c}")
     if steps:
-        lines.append("\n**Steps**")
+        lines.append("\n**진행 단계**")
         for i, s in enumerate(steps[:10], 1):
             lines.append(f"{i}. {s}")
     if fallback:
-        lines.append("\n**Additional info**\n- " + fallback)
+        lines.append("\n**추가로**\n- " + fallback)
     return "\n".join(lines).strip()
 
 def few_shot_messages(profile: Dict[str, Any]) -> List[tuple[str, str]]:
