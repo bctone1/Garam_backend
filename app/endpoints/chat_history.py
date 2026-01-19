@@ -42,17 +42,23 @@ router = APIRouter(prefix="/chat-history", tags=["대화 기록"])
     "/sessions",
     response_model=List[ChatSessionInsightResponse],
     summary="대화기록: 세션 요약/분류 목록",
+    description=(
+        "세션 인사이트 목록을 조회.\n"
+        "- 기간(date_from/date_to), 상태(status), 채널(channel), 카테고리(category), 대분류(quick_category_id)로 필터링\n"
+        "- q는 first_question/failed_reason 부분검색\n"
+        "- offset/limit 페이징 지원"
+    ),
 )
 def list_sessions(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
-    status: Optional[ChatInsightStatus] = Query(None),  # success/failed
-    channel: Optional[ChannelLiteral] = Query(None),
-    category: Optional[str] = Query(None),
-    quick_category_id: Optional[int] = Query(None, ge=1),
-    q: Optional[str] = Query(None),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    date_from: Optional[date] = Query(None, description="시작일(YYYY-MM-DD). 생략 시 전체"),
+    date_to: Optional[date] = Query(None, description="종료일(YYYY-MM-DD). 생략 시 전체"),
+    status: Optional[ChatInsightStatus] = Query(None, description="세션 인사이트 상태(success/failed)"),
+    channel: Optional[ChannelLiteral] = Query(None, description="채널 코드(web/mobile 등)"),
+    category: Optional[str] = Query(None, description="세션 카테고리(문자열)"),
+    quick_category_id: Optional[int] = Query(None, ge=1, description="quick_category.id(대분류)"),
+    q: Optional[str] = Query(None, description="first_question/failed_reason 부분검색"),
+    offset: int = Query(0, ge=0, description="페이징 offset"),
+    limit: int = Query(50, ge=1, le=200, description="페이징 limit(최대 200)"),
     db: Session = Depends(get_db),
 ):
     return crud.list_session_insights(
@@ -73,13 +79,17 @@ def list_sessions(
     "/sessions/count",
     response_model=Dict[str, int],
     summary="대화기록: 세션 카운트(전체/성공/실패)",
+    description=(
+        "세션 인사이트 카운트를 반환\n"
+        "- 동일한 필터(기간/채널/카테고리/대분류) 조건으로 total/success/failed를 집계"
+    ),
 )
 def count_sessions(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
-    channel: Optional[ChannelLiteral] = Query(None),
-    category: Optional[str] = Query(None),
-    quick_category_id: Optional[int] = Query(None, ge=1),
+    date_from: Optional[date] = Query(None, description="시작일(YYYY-MM-DD). 생략 시 전체"),
+    date_to: Optional[date] = Query(None, description="종료일(YYYY-MM-DD). 생략 시 전체"),
+    channel: Optional[ChannelLiteral] = Query(None, description="채널 코드(web/mobile 등)"),
+    category: Optional[str] = Query(None, description="세션 카테고리(문자열)"),
+    quick_category_id: Optional[int] = Query(None, ge=1, description="quick_category.id(대분류)"),
     db: Session = Depends(get_db),
 ):
     total = crud.count_session_insights(
@@ -107,15 +117,20 @@ def count_sessions(
     "/questions",
     response_model=List[ChatMessageInsightResponse],
     summary="대화기록: 질문(=user 메시지) 목록",
+    description=(
+        "질문(=user role 메시지) 인사이트 목록을 조회합니다.\n"
+        "- 기간/세션/채널/카테고리 조건으로 필터링\n"
+        "- 내부적으로 message_insight 중 is_question=true만 반환"
+    ),
 )
 def list_questions(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
-    session_id: Optional[int] = Query(None),
-    channel: Optional[ChannelLiteral] = Query(None),
-    category: Optional[str] = Query(None),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    date_from: Optional[date] = Query(None, description="시작일(YYYY-MM-DD). 생략 시 전체"),
+    date_to: Optional[date] = Query(None, description="종료일(YYYY-MM-DD). 생략 시 전체"),
+    session_id: Optional[int] = Query(None, description="특정 세션만 조회할 때 session_id"),
+    channel: Optional[ChannelLiteral] = Query(None, description="채널 코드(web/mobile 등)"),
+    category: Optional[str] = Query(None, description="메시지/세션 카테고리(문자열)"),
+    offset: int = Query(0, ge=0, description="페이징 offset"),
+    limit: int = Query(50, ge=1, le=200, description="페이징 limit(최대 200)"),
     db: Session = Depends(get_db),
 ):
     items = crud.list_message_insights(
@@ -135,13 +150,18 @@ def list_questions(
     "/wordcloud",
     response_model=WordCloudResponse,
     summary="대화기록: 워드클라우드(키워드 Top N)",
+    description=(
+        "기간 내 키워드 상위 Top N 집계를 반환.\n"
+        "- channel/quick_category_id 조건으로 분리된 워드클라우드 생성에 사용\n"
+        "- 응답: [{keyword, count}, ...]"
+    ),
 )
 def wordcloud(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
-    channel: Optional[ChannelLiteral] = Query(None),
-    quick_category_id: Optional[int] = Query(None, ge=1),
-    top_n: int = Query(100, ge=1, le=500),
+    date_from: Optional[date] = Query(None, description="시작일(YYYY-MM-DD). 생략 시 전체"),
+    date_to: Optional[date] = Query(None, description="종료일(YYYY-MM-DD). 생략 시 전체"),
+    channel: Optional[ChannelLiteral] = Query(None, description="채널 코드(web/mobile 등)"),
+    quick_category_id: Optional[int] = Query(None, ge=1, description="quick_category.id(대분류)"),
+    top_n: int = Query(100, ge=1, le=500, description="상위 N개(최대 500)"),
     db: Session = Depends(get_db),
 ):
     rows = crud.list_keyword_daily(
@@ -159,11 +179,16 @@ def wordcloud(
     "/rebuild",
     status_code=http_status.HTTP_202_ACCEPTED,
     response_model=Dict[str, Any],
-    summary="대화기록: 기간 재집계(인사이트/키워드)",
+    summary="대화기록: 기간 재집계(트리거)",
+    description=(
+        "지정한 기간(date_from~date_to)의 인사이트/키워드 집계를 재생성\n"
+        "- 대량 데이터 수정/백필(backfill) 후 재집계 용도\n"
+        "- 비동기 작업처럼 202(ACCEPTED)로 응답하지만, 구현에 따라 동기 처리도 가능"
+    ),
 )
 def rebuild(
-    date_from: date = Query(...),
-    date_to: date = Query(...),
+    date_from: date = Query(..., description="시작일(YYYY-MM-DD)"),
+    date_to: date = Query(..., description="종료일(YYYY-MM-DD)"),
     db: Session = Depends(get_db),
 ):
     if date_from > date_to:
@@ -189,16 +214,21 @@ def _default_target_knowledge_id() -> Optional[int]:
     "/suggestions",
     response_model=List[KnowledgeSuggestionResponse],
     summary="실패/리뷰 큐: 목록",
+    description=(
+        "실패/리뷰 대상(knowledge_suggestion) 목록을 조회\n"
+        "- review_status(pending/ingested/deleted), answer_status(error/...), 세션/채널/기간 필터\n"
+        "- 운영자가 pending을 골라 ingest 또는 delete 처리하는 화면에 사용"
+    ),
 )
 def list_suggestions(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
-    review_status: Optional[ReviewStatus] = Query(None),
-    answer_status: Optional[AnswerStatus] = Query(None),
-    session_id: Optional[int] = Query(None),
-    channel: Optional[ChannelLiteral] = Query(None),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    date_from: Optional[date] = Query(None, description="시작일(YYYY-MM-DD). 생략 시 전체"),
+    date_to: Optional[date] = Query(None, description="종료일(YYYY-MM-DD). 생략 시 전체"),
+    review_status: Optional[ReviewStatus] = Query(None, description="리뷰 상태(pending/ingested/deleted)"),
+    answer_status: Optional[AnswerStatus] = Query(None, description="답변 상태(error/...)"),
+    session_id: Optional[int] = Query(None, description="특정 세션만 조회할 때 session_id"),
+    channel: Optional[ChannelLiteral] = Query(None, description="채널 코드(web/mobile 등)"),
+    offset: int = Query(0, ge=0, description="페이징 offset"),
+    limit: int = Query(50, ge=1, le=200, description="페이징 limit(최대 200)"),
     db: Session = Depends(get_db),
 ):
     return crud.list_knowledge_suggestions(
@@ -218,13 +248,18 @@ def list_suggestions(
     "/suggestions/count",
     response_model=Dict[str, int],
     summary="실패/리뷰 큐: 카운트(total/pending/ingested/deleted)",
+    description=(
+        "실패/리뷰 큐의 상태별 카운트를 반환\n"
+        "- 필터(기간/세션/채널/answer_status)를 동일하게 적용한 뒤\n"
+        "  total/pending/ingested/deleted로 분해해서 반환"
+    ),
 )
 def count_suggestions(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
-    answer_status: Optional[AnswerStatus] = Query(None),
-    session_id: Optional[int] = Query(None),
-    channel: Optional[ChannelLiteral] = Query(None),
+    date_from: Optional[date] = Query(None, description="시작일(YYYY-MM-DD). 생략 시 전체"),
+    date_to: Optional[date] = Query(None, description="종료일(YYYY-MM-DD). 생략 시 전체"),
+    answer_status: Optional[AnswerStatus] = Query(None, description="답변 상태(error/...)"),
+    session_id: Optional[int] = Query(None, description="특정 세션만 조회할 때 session_id"),
+    channel: Optional[ChannelLiteral] = Query(None, description="채널 코드(web/mobile 등)"),
     db: Session = Depends(get_db),
 ):
     total = crud.count_knowledge_suggestions(
@@ -271,6 +306,11 @@ def count_suggestions(
     response_model=KnowledgeSuggestionResponse,
     status_code=http_status.HTTP_201_CREATED,
     summary="실패/리뷰 큐: pending 생성(또는 멱등 upsert)",
+    description=(
+        "pending 상태의 knowledge_suggestion을 생성하거나(없으면), 동일 message_id 기준으로 갱신(멱등).\n"
+        "- 운영/자동화 로직에서 '실패 케이스 적재' 용도로 호출\n"
+        "- 최소 입력: session_id, message_id, question_text, assistant_answer(또는 빈값), reason_code"
+    ),
 )
 def create_pending_suggestion(
     payload: KnowledgeSuggestionCreate,
@@ -295,6 +335,13 @@ def create_pending_suggestion(
     "/suggestions/{message_id}/ingest",
     response_model=KnowledgeSuggestionResponse,
     summary="실패/리뷰 큐: 지식베이스 반영(pending -> ingested)",
+    description=(
+        "pending suggestion을 지식베이스에 반영하고 ingested로 전환\n"
+        "- final_answer는 필수(운영자 확정 답변)\n"
+        "- target_knowledge_id 우선순위: payload > suggestion.target_knowledge_id > ENV 기본값\n"
+        "- 저장 텍스트는 'Q: ...\\nA: ...' 형태로 chunk 생성(검색 힌트 강화)\n"
+        "- 임베딩 생성이 실패해도 chunk는 저장되도록 설계(벡터는 None/기본값 처리)"
+    ),
 )
 def ingest_suggestion(
     message_id: int,
@@ -321,17 +368,15 @@ def ingest_suggestion(
     if not final_answer:
         raise HTTPException(status_code=400, detail="final_answer required")
 
-    # chunk 텍스트: Q/A 같이 넣어서 검색 힌트 강화
     chunk_text = f"Q: {sug.question_text}\nA: {final_answer}"
 
-    # (선택) 임베딩. 실패해도 동작은 하게(제로 벡터 fallback)
     vector = None
     try:
         from langchain_service.embedding.get_vector import text_to_vector  # type: ignore
+
         vector = text_to_vector(chunk_text)
     except Exception:
         vector = None
-
 
     chunk_index = 1_000_000_000 + int(message_id)
 
@@ -361,6 +406,11 @@ def ingest_suggestion(
     "/suggestions/{message_id}/delete",
     response_model=KnowledgeSuggestionResponse,
     summary="실패/리뷰 큐: 삭제 처리(pending -> deleted)",
+    description=(
+        "pending suggestion을 deleted 상태로 전환\n"
+        "- 운영자 판단으로 반영하지 않기로 결정한 케이스 처리\n"
+        "- 이미 ingested인 항목은 정책상 제한될 수 있으며(ValueError) 400으로 반환"
+    ),
 )
 def delete_suggestion(
     message_id: int,
@@ -380,6 +430,11 @@ def delete_suggestion(
     "/messages/{message_id}",
     status_code=http_status.HTTP_204_NO_CONTENT,
     summary="대화기록: 메시지 하드 삭제(원하면 사용, FK는 CASCADE로 같이 삭제됨)",
+    description=(
+        "message 레코드를 하드 삭제\n"
+        "- 연관 테이블이 FK CASCADE로 연결돼 있으면 관련 인사이트/제안/첨부 데이터가 함께 삭제\n"
+        "- 운영 환경에서는 데이터 정합성/감사 로그 정책을 고려해서 신중히 사용"
+    ),
 )
 def hard_delete_message(
     message_id: int,
