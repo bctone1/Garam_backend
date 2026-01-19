@@ -43,7 +43,7 @@ router = APIRouter(prefix="/chat-history", tags=["대화 기록"])
     response_model=List[ChatSessionInsightResponse],
     summary="대화기록: 세션 요약/분류 목록",
     description=(
-        "세션 인사이트 목록을 조회.\n"
+        "세션 인사이트 목록을 조회(null 제외)\n"
         "- 기간(date_from/date_to), 상태(status), 채널(channel), 카테고리(category), 대분류(quick_category_id)로 필터링\n"
         "- q는 first_question/failed_reason 부분검색\n"
         "- offset/limit 페이징 지원"

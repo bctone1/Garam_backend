@@ -121,6 +121,11 @@ def upsert_session_insight(
     return obj
 
 
+from sqlalchemy import select, func
+
+# ... (imports / _dt_range_utc / ChatSessionInsight 등 기존 그대로)
+
+
 def list_session_insights(
     db: Session,
     *,
@@ -157,6 +162,8 @@ def list_session_insights(
             | (ChatSessionInsight.failed_reason.ilike(like))
         )
 
+    stmt = stmt.where(func.coalesce(ChatSessionInsight.question_count, 0) > 0)
+
     stmt = stmt.order_by(ChatSessionInsight.started_at.desc()).offset(offset).limit(limit)
     return db.execute(stmt).scalars().all()
 
@@ -187,6 +194,8 @@ def count_session_insights(
         stmt = stmt.where(ChatSessionInsight.category == category)
     if quick_category_id is not None:
         stmt = stmt.where(ChatSessionInsight.quick_category_id == int(quick_category_id))
+
+    stmt = stmt.where(func.coalesce(ChatSessionInsight.question_count, 0) > 0)
 
     return int(db.execute(stmt).scalar_one())
 
