@@ -7,7 +7,7 @@ from typing import Optional, List, Literal, Any, Dict
 from pydantic import BaseModel, Field
 
 
-ChatInsightStatus = Literal["success", "failed"]
+ChatInsightStatus = Literal["success", "failed", "commit"]
 ChannelLiteral = Literal["web", "mobile"]
 
 # 최소 상태(확정)
@@ -102,6 +102,7 @@ class ChatKeywordDailyUpsert(ChatKeywordDailyBase):
     """
     서비스/ETL에서 upsert할 때 쓰는 입력 스키마(외부 API에 노출 안 해도 됨).
     """
+
     pass
 
 
@@ -120,6 +121,7 @@ class ChatHistoryRange(BaseModel):
     """
     공통 기간 필터(대시보드/대화기록 화면용)
     """
+
     date_from: Optional[date] = None
     date_to: Optional[date] = None  # inclusive/exclusive 처리는 endpoint에서 통일
 
@@ -184,6 +186,7 @@ class KnowledgeSuggestionCreate(BaseModel):
     보통 서버가 error 확정 시 자동 생성(upsert).
     (UI 버튼 기반 생성이 필요하면 사용)
     """
+
     session_id: int
     message_id: int
     question_text: str
@@ -198,6 +201,7 @@ class KnowledgeSuggestionIngestRequest(BaseModel):
     final_answer는 필수.
     target_knowledge_id 미지정이면 suggestion.target_knowledge_id 또는 서버 기본값 사용(엔드포인트에서 처리)
     """
+
     final_answer: str = Field(..., min_length=1)
     target_knowledge_id: Optional[int] = None
 
@@ -206,6 +210,7 @@ class KnowledgeSuggestionDeleteRequest(BaseModel):
     """
     pending -> deleted
     """
+
     deleted_reason: Optional[str] = None
 
 
@@ -246,27 +251,22 @@ __all__ = [
     "ChannelLiteral",
     "AnswerStatus",
     "ReviewStatus",
-
     # session insight
     "ChatSessionInsightCreate",
     "ChatSessionInsightUpdate",
     "ChatSessionInsightResponse",
-
     # message insight
     "ChatMessageInsightCreate",
     "ChatMessageInsightUpdate",
     "ChatMessageInsightResponse",
-
     # keyword daily
     "ChatKeywordDailyUpsert",
     "ChatKeywordDailyResponse",
-
     # queries
     "ChatSessionInsightListQuery",
     "ChatMessageInsightListQuery",
     "WordCloudQuery",
     "WordCloudResponse",
-
     # knowledge suggestion
     "KnowledgeSuggestionCreate",
     "KnowledgeSuggestionIngestRequest",

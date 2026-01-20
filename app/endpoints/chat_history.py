@@ -52,7 +52,9 @@ router = APIRouter(prefix="/chat-history", tags=["대화 기록"])
 def list_sessions(
     date_from: Optional[date] = Query(None, description="시작일(YYYY-MM-DD). 생략 시 전체"),
     date_to: Optional[date] = Query(None, description="종료일(YYYY-MM-DD). 생략 시 전체"),
-    status: Optional[ChatInsightStatus] = Query(None, description="세션 인사이트 상태(success/failed)"),
+    status: Optional[ChatInsightStatus] = Query(
+        None, description="세션 인사이트 상태(success/failed/commit)"
+    ),
     channel: Optional[ChannelLiteral] = Query(None, description="채널 코드(web/mobile 등)"),
     category: Optional[str] = Query(None, description="세션 카테고리(문자열)"),
     quick_category_id: Optional[int] = Query(None, ge=1, description="quick_category.id(대분류)"),
@@ -78,10 +80,10 @@ def list_sessions(
 @router.get(
     "/sessions/count",
     response_model=Dict[str, int],
-    summary="대화기록: 세션 카운트(전체/성공/실패)",
+    summary="대화기록: 세션 카운트(전체/성공/실패/커밋)",
     description=(
         "세션 인사이트 카운트를 반환\n"
-        "- 동일한 필터(기간/채널/카테고리/대분류) 조건으로 total/success/failed를 집계"
+        "- 동일한 필터(기간/채널/카테고리/대분류) 조건으로 total/success/failed/commit를 집계"
     ),
 )
 def count_sessions(
@@ -110,7 +112,21 @@ def count_sessions(
         category=category,
         quick_category_id=quick_category_id,
     )
-    return {"total": total, "success": total - failed, "failed": failed}
+    commit = crud.count_session_insights(
+        db,
+        date_from=date_from,
+        date_to=date_to,
+        status="commit",
+        channel=channel,
+        category=category,
+        quick_category_id=quick_category_id,
+    )
+    return {
+        "total": total,
+        "success": total - failed - commit,
+        "failed": failed,
+        "commit": commit,
+    }
 
 
 @router.get(

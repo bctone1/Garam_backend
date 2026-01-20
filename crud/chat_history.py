@@ -537,6 +537,10 @@ def mark_knowledge_suggestion_ingested(
     obj.ingested_at = datetime.now(timezone.utc)
     obj.review_status = "ingested"
 
+    insight = db.get(ChatSessionInsight, obj.session_id)
+    if insight and insight.status == "failed":
+        insight.status = "commit"
+
     db.flush()
     return obj
 
