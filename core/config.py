@@ -116,6 +116,7 @@ EMBEDDING_DIM = 1536
 VECTOR_DISTANCE_THRESHOLD = 0.35
 VECTOR_CANDIDATE_MULT = 5
 IVFFLAT_PROBES = 10   # lists=100이면 보통 5~20 사이에서 튜닝
+RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.12"))
 
 
 # 8) 모델 카탈로그
@@ -172,4 +173,3 @@ DEFAULT_STT_MODEL = "CLOVA_STT"
 CLOVA_STT_BILLING_UNIT_SECONDS = 6   # 6초 단위 과금
 CLOVA_STT_PRICE_PER_UNIT_KRW = 1.6      # 15초당 4원
 FX_KRW_PER_USD = 1400                 # 원→달러 환산. 미사용 시 None
-

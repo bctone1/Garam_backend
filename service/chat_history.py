@@ -139,6 +139,7 @@ def extract_keywords_mecab(text: str, *, max_keywords: int = 10) -> List[str]:
             continue
 
         if _HANGUL_RE.match(tok):
+            # 한글은 1글자도 의미 있을 수 있어 허용
             pass
         else:
             if len(tok) < 2:
@@ -196,51 +197,24 @@ def _is_failed_assistant_message(msg: Message) -> bool:
 # =========================
 # QuickCategory helpers
 # =========================
-def _load_quick_category_maps(db: Session) -> Tuple[Dict[str, int], Dict[int, str]]:
+def _load_quick_category_name_map(db: Session) -> Dict[str, int]:
     """
-    (name_lower -> id), (id -> name)
+    quick_category.name(lower) -> id
     """
     rows = db.execute(sa_text("SELECT id, name FROM quick_category")).mappings().all()
-    name_to_id: Dict[str, int] = {}
-    id_to_name: Dict[int, str] = {}
+    out: Dict[str, int] = {}
     for r in rows:
-        _id = int(r["id"])
-        name = str(r.get("name") or "").strip()
+        name = str(r.get("name") or "").strip().lower()
         if not name:
             continue
-        name_to_id[name.lower()] = _id
-        id_to_name[_id] = name
-    return name_to_id, id_to_name
+        out[name] = int(r["id"])
+    return out
 
 
-def _norm_for_match(s: str) -> str:
-    # 공백 제거 + 소문자
-    return re.sub(r"\s+", "", (s or "").strip().lower())
-
-
-def _infer_quick_category_id_from_text(
-    text: Optional[str],
-    *,
-    name_to_id: Dict[str, int],
-) -> Optional[int]:
-    """
-    매우 단순 룰:
-    - 질문 텍스트(공백 제거) 안에 quick_category.name(공백 제거)가 포함되면 매칭
-    - 여러 개면 "가장 긴 name" 우선(짧은 토큰에 과매칭 방지)
-    """
-    if not text:
-        return None
-
-    qn = _norm_for_match(text)
-    if not qn:
-        return None
-
-    # 긴 이름 우선
-    candidates = sorted(name_to_id.keys(), key=lambda x: len(_norm_for_match(x)), reverse=True)
-    for name in candidates:
-        nn = _norm_for_match(name)
-        if nn and nn in qn:
-            return int(name_to_id[name])
+def _get_etc_quick_category_id(name_map: Dict[str, int]) -> Optional[int]:
+    for key in ("etc", "기타"):
+        if key in name_map:
+            return int(name_map[key])
     return None
 
 
@@ -262,7 +236,7 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
     if not session_ids:
         crud.delete_keyword_daily_range(db, date_from=date_from, date_to=date_to)
         db.commit()
-        return {"sessions": 0, "messages": 0, "keywords": 0, "suggestions": 0}
+        return {"sessions": 0, "messages": 0, "keywords": 0}
 
     msgs: List[Message] = db.execute(
         select(Message).where(Message.session_id.in_(session_ids)).order_by(Message.created_at.asc())
@@ -272,9 +246,9 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
     for m in msgs:
         by_session[int(m.session_id)].append(m)
 
-    # quick_category maps + etc_id
-    qc_name_to_id, qc_id_to_name = _load_quick_category_maps(db)
-    etc_id: Optional[int] = qc_name_to_id.get("etc")
+    # quick_category name->id 맵 + etc_id
+    qc_name_map = _load_quick_category_name_map(db)
+    etc_id = _get_etc_quick_category_id(qc_name_map)
 
     # 1) session_insight 업데이트
     updated_sessions = 0
@@ -292,60 +266,25 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
         status = "failed" if failed_msg else "success"
         failed_reason = (failed_msg.content[:200] if failed_msg else None)
 
-        # ✅ channel 복제(세션에 채널 컬럼이 있으면 그걸로)
-        raw_channel = getattr(s, "channel", None)
-        channel_norm: Optional[str] = None
-        if raw_channel is not None:
-            channel_norm = str(raw_channel).strip().lower() or None
-
         si = crud.upsert_session_insight(
             db,
             session_id=sid,
             started_at=s.created_at,
-            channel=channel_norm,
             status=status,
             first_question=(first_q[:300] if first_q else None),
             question_count=qcount,
             failed_reason=failed_reason,
-            # category는 "캐시"지만, 아래에서 비어있으면 채워줄 거야
+            # category는 캐시용이므로 rebuild에서 굳이 덮어쓰지 않음
         )
 
-        # ✅ quick_category_id 확정 로직
-        qc_id_curr = getattr(si, "quick_category_id", None)
-
-        # 케이스 1) 비어있으면 추정 → 없으면 etc
-        if qc_id_curr is None:
-            inferred = _infer_quick_category_id_from_text(first_q, name_to_id=qc_name_to_id)
-            if inferred is not None:
-                si.quick_category_id = int(inferred)
+        # quick_category_id가 비어 있으면: (category 캐시가 있으면 매핑) -> 없으면 etc
+        if getattr(si, "quick_category_id", None) is None:
+            cat = getattr(si, "category", None)
+            mapped = qc_name_map.get(str(cat).strip().lower()) if cat else None
+            if mapped is not None:
+                si.quick_category_id = int(mapped)
             elif etc_id is not None:
                 si.quick_category_id = int(etc_id)
-
-        # 케이스 2) 이미 etc인데 category까지 비어 있으면(“전부 etc” 방어) 한번 더 추정 시도
-        else:
-            try:
-                qc_id_int = int(qc_id_curr)
-            except Exception:
-                qc_id_int = None
-
-            if qc_id_int is not None and etc_id is not None and qc_id_int == int(etc_id):
-                if not (getattr(si, "category", None) or "").strip():
-                    inferred = _infer_quick_category_id_from_text(first_q, name_to_id=qc_name_to_id)
-                    if inferred is not None and inferred != int(etc_id):
-                        si.quick_category_id = int(inferred)
-
-        # ✅ category 캐시(name) 채우기: null이면 quick_category_id의 name으로 채움
-        if not (getattr(si, "category", None) or "").strip():
-            qc_id_final = getattr(si, "quick_category_id", None)
-            try:
-                qc_id_final_int = int(qc_id_final) if qc_id_final is not None else None
-            except Exception:
-                qc_id_final_int = None
-
-            if qc_id_final_int is not None:
-                nm = qc_id_to_name.get(qc_id_final_int)
-                if nm:
-                    si.category = nm
 
         session_insight_cache[sid] = si
         updated_sessions += 1
@@ -369,46 +308,6 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
             created_at=m.created_at,
         )
         updated_messages += 1
-
-    # 2.6) knowledge_suggestion 자동 생성(실패 세션)
-    updated_suggestions = 0
-    for sid, mlist in by_session.items():
-        si = session_insight_cache.get(int(sid))
-        if not si:
-            continue
-        if str(getattr(si, "status", "success")) != "failed":
-            continue
-
-        failed_msg = next((m for m in reversed(mlist) if _is_failed_assistant_message(m)), None)
-        if not failed_msg:
-            continue
-
-        # 실패 assistant 직전의 마지막 user 질문을 찾기
-        question_msg: Optional[Message] = None
-        if failed_msg in mlist:
-            idx = mlist.index(failed_msg)
-            for j in range(idx - 1, -1, -1):
-                if mlist[j].role == "user":
-                    question_msg = mlist[j]
-                    break
-        if question_msg is None:
-            question_msg = next((m for m in reversed(mlist) if m.role == "user"), None)
-
-        if not question_msg:
-            continue
-
-        # 멱등 upsert (ingested/deleted는 보호됨)
-        crud.upsert_pending_knowledge_suggestion(
-            db,
-            session_id=int(sid),
-            message_id=int(question_msg.id),
-            question_text=str(question_msg.content or "").strip()[:5000],
-            assistant_answer=str(failed_msg.content or "").strip()[:5000],
-            reason_code="REBUILD_FAILED_SESSION",
-            retrieval_meta={"source": "rebuild_range"},
-            answer_status="error",
-        )
-        updated_suggestions += 1
 
     # 3) keyword_daily 재집계 (category 제거 -> quick_category_id 사용)
     crud.delete_keyword_daily_range(db, date_from=date_from, date_to=date_to)
@@ -442,9 +341,4 @@ def rebuild_range(db: Session, *, date_from: date, date_to: date) -> Dict[str, A
         )
 
     db.commit()
-    return {
-        "sessions": updated_sessions,
-        "messages": updated_messages,
-        "keywords": len(acc),
-        "suggestions": updated_suggestions,
-    }
+    return {"sessions": updated_sessions, "messages": updated_messages, "keywords": len(acc)}

@@ -161,14 +161,19 @@ def make_qa_chain(
     system_txt = (
         system_txt
         + "\n\nAdditional instructions:\n"
-        + "- Write answers in Markdown. (You may use **bold**, lists (-), and numbered lists (1.).)\n"
-        + "- Never use code blocks. (No ``` or ```json under any circumstance.)\n"
-        + "- Do not output JSON-only. Respond in normal sentences with lists.\n"
+        + "- Always respond in Markdown (no code fences).\n"
+        + "- Append a final HTML comment block with metadata in this format:\n"
+        + "  <!--\n"
+        + "  STATUS: ok|no_knowledge|need_clarification\n"
+        + "  REASON_CODE: <optional>\n"
+        + "  CITATIONS: chunk_id=1,knowledge_id=2,page_id=3,score=0.42 | chunk_id=...\n"
+        + "  -->\n"
+        + "- When status=ok, the answer must be present and CITATIONS must include at least 1 item.\n"
+        + "- When status=no_knowledge or need_clarification, keep the answer concise and set CITATIONS to empty.\n"
         + "- Ground your answer strictly in the provided context.\n"
         + "- Respond in the same language as the question (Korean/English/Chinese/Japanese).\n"
         + "- Do not switch output language based on the context language; follow the user's question language only.\n"
-        + "- If the context is insufficient, do not end with 'no information'; switch to a clarifying question.\n"
-        + "- If force_clarify is True, output only a clarifying question instead of an answer.\n"
+        + "- If force_clarify is True, set status=need_clarification and answer with a clarifying question.\n"
         + "- Use only the URLs in the [SOURCES] section for download/external links.\n"
     )
 
@@ -307,7 +312,7 @@ def make_qa_chain(
             "[Context Start]\n{context}\n[Context End]\n\n"
             "Question: {question}\n"
             "force_clarify: {force_clarify}\n\n"
-            "Output rules: Markdown OK / code blocks (``` ) forbidden / JSON-only forbidden / answer in the question language (Korean/English/Chinese/Japanese)\n",
+            "Output rules: Markdown only / no code blocks / answer in the question language (Korean/English/Chinese/Japanese)\n",
         )
     )
 

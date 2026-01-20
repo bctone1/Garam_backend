@@ -1,7 +1,7 @@
 # schemas/llm.py
 from __future__ import annotations
 
-from typing import Optional, Literal, List
+from typing import Optional, Literal, List, Dict, Any
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -66,6 +66,13 @@ class QASource(BaseModel):
     text: str = Field(default="")
 
 
+class QACitation(BaseModel):
+    knowledge_id: Optional[int] = None
+    chunk_id: Optional[int] = None
+    page_id: Optional[int] = None
+    score: Optional[float] = None
+
+
 class QAResponse(BaseModel):
     """
     QA 응답 표준.
@@ -78,8 +85,13 @@ class QAResponse(BaseModel):
     answer: str
     session_id: Optional[int] = None
 
+    status: Literal["ok", "no_knowledge", "need_clarification"] = "ok"
+    reason_code: Optional[str] = None
+    citations: List[QACitation] = Field(default_factory=list)
+
     sources: List[QASource] = Field(default_factory=list)
     documents: List[QASource] = Field(default_factory=list)
+    retrieval_meta: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def _sync_sources_documents(self) -> "QAResponse":

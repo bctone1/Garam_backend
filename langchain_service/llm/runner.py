@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -19,7 +20,7 @@ from schemas.llm import QASource, QAResponse
 from core import config
 from core.pricing import tokens_for_texts, estimate_llm_cost_usd
 
-from service.knowledge_retrieval import retrieve_topk_hybrid
+from service.knowledge_retrieval import retrieve_topk_hybrid_with_scores
 
 from langchain_service.chain.qa_chain import make_qa_chain
 from langchain_service.embedding.get_vector import _to_vector
@@ -56,8 +57,8 @@ def _retrieve_sources_and_context(
     knowledge_id: Optional[int],
     top_k: int,
     question: str,
-) -> Tuple[List[QASource], str]:
-    chunks = retrieve_topk_hybrid(
+) -> Tuple[List[QASource], str, dict[str, Any]]:
+    chunks, score_map, max_sim = retrieve_topk_hybrid_with_scores(
         db,
         query_vector=vector,
         knowledge_id=knowledge_id,
@@ -65,19 +66,34 @@ def _retrieve_sources_and_context(
         query_text=question,
     )
 
-    sources: List[QASource] = [
-        QASource(
-            chunk_id=getattr(c, "id", None),
-            knowledge_id=getattr(c, "knowledge_id", None),
-            page_id=getattr(c, "page_id", None),
-            chunk_index=getattr(c, "chunk_index", None),
-            text=getattr(c, "chunk_text", "") or "",
+    sources: List[QASource] = []
+    context_lines: list[str] = []
+    for c in chunks:
+        cid = getattr(c, "id", None)
+        kid = getattr(c, "knowledge_id", None)
+        pid = getattr(c, "page_id", None)
+        score = None
+        if cid is not None and int(cid) in score_map:
+            score = score_map[int(cid)].get("sim")
+        score_repr = f"{float(score):.4f}" if score is not None else "null"
+        context_lines.append(
+            f"[CHUNK id={cid} knowledge_id={kid} page_id={pid} score={score_repr}]"
         )
-        for c in chunks
-    ]
+        chunk_text = getattr(c, "chunk_text", "") or ""
+        context_lines.append(chunk_text)
+        sources.append(
+            QASource(
+                chunk_id=cid,
+                knowledge_id=kid,
+                page_id=pid,
+                chunk_index=getattr(c, "chunk_index", None),
+                text=chunk_text,
+            )
+        )
 
-    context_text = ("\n\n".join(s.text for s in sources))[:MAX_CTX_CHARS]
-    return sources, context_text
+    context_text = ("\n\n".join(context_lines))[:MAX_CTX_CHARS]
+    meta = {"max_sim": max_sim, "has_chunks": bool(chunks)}
+    return sources, context_text, meta
 
 
 def _render_prompt_for_estimate(
@@ -90,11 +106,11 @@ def _render_prompt_for_estimate(
     system_txt = build_system_prompt(style=(style or "friendly"), **(policy_flags or {}))
     return [
         system_txt,
-        "다음 컨텍스트를 참고해.",
-        "[컨텍스트 시작]",
+        "Refer to the following context.",
+        "[Context Start]",
         context_text,
-        "[컨텍스트 끝]",
-        "질문: " + question,
+        "[Context End]",
+        "Question: " + question,
         "force_clarify: False",
     ]
 
@@ -132,13 +148,28 @@ def _run_qa(
             db.refresh(message)
 
     # 검색 1회
-    sources, context_text = _retrieve_sources_and_context(
+    sources, context_text, meta = _retrieve_sources_and_context(
         db,
         vector=vector,
         knowledge_id=knowledge_id,
         top_k=top_k,
         question=question,
     )
+
+    min_score = float(getattr(config, "RAG_MIN_SCORE", 0.12))
+    max_sim = meta.get("max_sim")
+    if not meta.get("has_chunks") or (max_sim is not None and float(max_sim) < min_score):
+        return QAResponse(
+            status="no_knowledge",
+            answer="지식베이스에서 근거를 찾지 못했습니다. 질문을 조금 더 구체적으로 알려주세요.",
+            reason_code="LOW_RETRIEVAL",
+            retrieval_meta=meta,
+            citations=[],
+            question=question,
+            session_id=session_id,
+            sources=[],
+            documents=[],
+        )
 
     provider = getattr(config, "LLM_PROVIDER", "openai").lower()
     model = getattr(config, "LLM_MODEL", getattr(config, "DEFAULT_CHAT_MODEL", "gpt-4o-mini"))
@@ -254,10 +285,99 @@ def _run_qa(
             detail = f"{detail} ({type(exc).__name__}: {exc})"
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail) from exc
 
+    status_val = "no_knowledge"
+    reason_code = "MISSING_METADATA"
+    citations: list[dict[str, Any]] = []
+    answer_val = resp_text or ""
+    has_metadata = False
+
+    meta_match = re.search(r"<!--(.*?)-->\s*$", resp_text or "", flags=re.DOTALL)
+    if meta_match:
+        has_metadata = True
+        meta_block = meta_match.group(1)
+        answer_val = (resp_text or "")[: meta_match.start()].strip()
+        for raw_line in meta_block.splitlines():
+            line = raw_line.strip()
+            if not line or ":" not in line:
+                continue
+            key, val = [p.strip() for p in line.split(":", 1)]
+            key_upper = key.upper()
+            if key_upper == "STATUS":
+                status_val = val
+            elif key_upper == "REASON_CODE":
+                reason_code = val or None
+            elif key_upper == "CITATIONS":
+                items = [v.strip() for v in val.split("|") if v.strip()]
+                for item in items:
+                    entry: dict[str, Any] = {}
+                    for part in item.split(","):
+                        if "=" not in part:
+                            continue
+                        k, v = [p.strip() for p in part.split("=", 1)]
+                        if k in {"chunk_id", "knowledge_id", "page_id"}:
+                            try:
+                                entry[k] = int(v)
+                            except Exception:
+                                continue
+                        elif k == "score":
+                            try:
+                                entry[k] = float(v)
+                            except Exception:
+                                continue
+                    if entry:
+                        citations.append(entry)
+
+    if not has_metadata and sources:
+        status_val = "ok"
+        reason_code = reason_code or "MISSING_METADATA"
+        citations = [
+            {
+                "chunk_id": getattr(sources[0], "chunk_id", None),
+                "knowledge_id": getattr(sources[0], "knowledge_id", None),
+                "page_id": getattr(sources[0], "page_id", None),
+                "score": None,
+            }
+        ]
+
+    if status_val not in {"ok", "no_knowledge", "need_clarification"}:
+        status_val = "no_knowledge"
+        reason_code = reason_code or "INVALID_METADATA"
+
+    if status_val == "ok" and not citations and sources:
+        citations = [
+            {
+                "chunk_id": getattr(sources[0], "chunk_id", None),
+                "knowledge_id": getattr(sources[0], "knowledge_id", None),
+                "page_id": getattr(sources[0], "page_id", None),
+                "score": None,
+            }
+        ]
+        reason_code = reason_code or "MISSING_CITATION"
+    elif status_val == "ok" and not citations:
+        status_val = "no_knowledge"
+        reason_code = reason_code or "MISSING_CITATION"
+
+    if status_val != "ok":
+        if status_val == "need_clarification":
+            answer_val = "질문을 조금 더 구체적으로 알려주세요."
+        else:
+            answer_val = "지식베이스에서 근거를 찾지 못했습니다. 질문을 조금 더 구체적으로 알려주세요."
+
+    source_map = {int(getattr(s, "chunk_id", 0) or 0): s for s in sources}
+    resolved_sources: list[QASource] = []
+    for item in citations:
+        cid = item.get("chunk_id")
+        if isinstance(cid, int) and cid in source_map:
+            resolved_sources.append(source_map[cid])
+
     return QAResponse(
-        answer=resp_text,
+        status=status_val,
+        answer=str(answer_val or ""),
+        reason_code=reason_code,
+        retrieval_meta=meta,
+        citations=citations,
         question=question,
         session_id=session_id,
-        sources=sources,
-        documents=sources,
+        sources=resolved_sources,
+        documents=resolved_sources,
     )
