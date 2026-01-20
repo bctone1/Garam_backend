@@ -16,7 +16,7 @@ def get_llm(
     provider: str = "openai",
     model: str | None = None,
     api_key: str | None = None,
-    temperature: float = 0.7,
+    temperature: float = 0.4,
     **kwargs,
 ):
     """
