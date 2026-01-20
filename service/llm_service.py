@@ -154,12 +154,12 @@ def _get_etc_quick_category(qcs: list[dict]) -> tuple[Optional[int], Optional[st
     return None, None
 
 
-def _normalize_channel(channel: Optional[str]) -> str:
+def _normalize_channel(channel: Optional[str]) -> Optional[str]:
     if channel is not None:
         normalized = str(channel).strip().lower()
         if normalized:
             return normalized
-    return _DEFAULT_CHANNEL
+    return None
 
 
 
@@ -270,7 +270,7 @@ def _record_user_message_and_update_insights(
     content: str,
     channel: Optional[str],
     extra_data: dict,
-) -> None:
+) -> str:
     """
     Tx(짧게): user message 저장 + message_insight(keywords) 저장 + session_insight(first/qcount/category) 업데이트
     - LLM 호출은 절대 여기서 하지 않음.
@@ -306,9 +306,12 @@ def _record_user_message_and_update_insights(
     ins = crud_chat_history.ensure_session_insight(db, session_id=session_id)
 
     normalized_channel = _normalize_channel(channel)
+    existing_channel = getattr(ins, "channel", None)
+    final_channel = normalized_channel or existing_channel or _DEFAULT_CHANNEL
     # channel은 최초 1회만 세팅(있으면 유지)
-    if normalized_channel and not getattr(ins, "channel", None):
-        ins.channel = str(normalized_channel)
+    if final_channel and not existing_channel:
+        ins.channel = str(final_channel)
+    extra_data["channel"] = final_channel
 
     # question_count는 user 질문마다 +1
     current_q = int(getattr(ins, "question_count", 0) or 0)
@@ -329,6 +332,7 @@ def _record_user_message_and_update_insights(
 
     db.add(ins)
     db.flush()
+    return str(final_channel)
 
 
 def _coerce_policy_refusal_status(resp: QAResponse) -> None:
@@ -362,7 +366,7 @@ def ask_in_session_service(db: Session, *, session_id: int, payload: ChatQAReque
 
     # Tx1) user message + insights (LLM 호출 전에 커밋되어야 runner가 히스토리 조회 가능)
     try:
-        _record_user_message_and_update_insights(
+        channel = _record_user_message_and_update_insights(
             db,
             session_id=session_id,
             content=payload.question,

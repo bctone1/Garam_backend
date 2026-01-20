@@ -23,7 +23,17 @@ log = logging.getLogger("chat_history")
 # =========================
 # Helpers
 # =========================
-def _dt_range_utc(date_from: Optional[date], date_to: Optional[date]) -> Tuple[Optional[datetime], Optional[datetime]]:
+def _infer_channel_from_session_title(title: Optional[str]) -> Optional[str]:
+    if not title:
+        return None
+    if str(title).strip() == "모바일 대화":
+        return "mobile"
+    return None
+
+
+def _dt_range_utc(
+    date_from: Optional[date], date_to: Optional[date]
+) -> Tuple[Optional[datetime], Optional[datetime]]:
     """
     date_to는 inclusive로 받고, 쿼리는 [from, to+1day) 로 처리.
     """
@@ -32,7 +42,9 @@ def _dt_range_utc(date_from: Optional[date], date_to: Optional[date]) -> Tuple[O
     if date_from:
         dt_from = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
     if date_to:
-        dt_to_excl = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+        dt_to_excl = datetime.combine(
+            date_to + timedelta(days=1), time.min, tzinfo=timezone.utc
+        )
     return dt_from, dt_to_excl
 
 
@@ -49,6 +61,13 @@ def ensure_session_insight(db: Session, session_id: int) -> ChatSessionInsight:
     """
     obj = db.get(ChatSessionInsight, session_id)
     if obj:
+        if not getattr(obj, "channel", None):
+            sess = db.get(ChatSession, session_id)
+            inferred = _infer_channel_from_session_title(
+                getattr(sess, "title", None) if sess else None
+            )
+            if inferred:
+                obj.channel = inferred
         return obj
 
     sess = db.get(ChatSession, session_id)
@@ -58,6 +77,7 @@ def ensure_session_insight(db: Session, session_id: int) -> ChatSessionInsight:
     obj = ChatSessionInsight(
         session_id=session_id,
         started_at=sess.created_at,
+        channel=_infer_channel_from_session_title(getattr(sess, "title", None)),
         status="success",
         question_count=0,
     )
@@ -88,7 +108,8 @@ def upsert_session_insight(
         obj = ChatSessionInsight(
             session_id=session_id,
             started_at=started_at or sess.created_at,
-            channel=channel,
+            channel=channel
+            or _infer_channel_from_session_title(getattr(sess, "title", None)),
             category=category,
             quick_category_id=quick_category_id,
             status=status or "success",
@@ -104,6 +125,13 @@ def upsert_session_insight(
         obj.started_at = started_at
     if channel is not None:
         obj.channel = channel
+    elif not getattr(obj, "channel", None):
+        sess = db.get(ChatSession, session_id)
+        inferred = _infer_channel_from_session_title(
+            getattr(sess, "title", None) if sess else None
+        )
+        if inferred:
+            obj.channel = inferred
     if category is not None:
         obj.category = category
     if quick_category_id is not None:
@@ -154,7 +182,9 @@ def list_session_insights(
     if category:
         stmt = stmt.where(ChatSessionInsight.category == category)
     if quick_category_id is not None:
-        stmt = stmt.where(ChatSessionInsight.quick_category_id == int(quick_category_id))
+        stmt = stmt.where(
+            ChatSessionInsight.quick_category_id == int(quick_category_id)
+        )
     if q:
         like = f"%{q}%"
         stmt = stmt.where(
@@ -164,7 +194,9 @@ def list_session_insights(
 
     stmt = stmt.where(func.coalesce(ChatSessionInsight.question_count, 0) > 0)
 
-    stmt = stmt.order_by(ChatSessionInsight.started_at.desc()).offset(offset).limit(limit)
+    stmt = (
+        stmt.order_by(ChatSessionInsight.started_at.desc()).offset(offset).limit(limit)
+    )
     return db.execute(stmt).scalars().all()
 
 
@@ -193,7 +225,9 @@ def count_session_insights(
     if category:
         stmt = stmt.where(ChatSessionInsight.category == category)
     if quick_category_id is not None:
-        stmt = stmt.where(ChatSessionInsight.quick_category_id == int(quick_category_id))
+        stmt = stmt.where(
+            ChatSessionInsight.quick_category_id == int(quick_category_id)
+        )
 
     stmt = stmt.where(func.coalesce(ChatSessionInsight.question_count, 0) > 0)
 
@@ -251,7 +285,7 @@ def upsert_message_insight(
             session_id = session_id or msg.session_id
             created_at = created_at or msg.created_at
             if is_question is None:
-                is_question = (msg.role == "user")
+                is_question = msg.role == "user"
 
         obj = ChatMessageInsight(
             message_id=message_id,
@@ -310,18 +344,26 @@ def list_message_insights(
             ChatSessionInsight.session_id == ChatMessageInsight.session_id,
         ).where(ChatSessionInsight.channel == channel)
 
-    stmt = stmt.order_by(ChatMessageInsight.created_at.desc()).offset(offset).limit(limit)
+    stmt = (
+        stmt.order_by(ChatMessageInsight.created_at.desc()).offset(offset).limit(limit)
+    )
     return db.execute(stmt).scalars().all()
 
 
-
-def get_knowledge_suggestion(db: Session, suggestion_id: int) -> Optional[KnowledgeSuggestion]:
+def get_knowledge_suggestion(
+    db: Session, suggestion_id: int
+) -> Optional[KnowledgeSuggestion]:
     return db.get(KnowledgeSuggestion, suggestion_id)
 
 
-def get_knowledge_suggestion_by_message(db: Session, message_id: int) -> Optional[KnowledgeSuggestion]:
-    stmt = select(KnowledgeSuggestion).where(KnowledgeSuggestion.message_id == int(message_id))
+def get_knowledge_suggestion_by_message(
+    db: Session, message_id: int
+) -> Optional[KnowledgeSuggestion]:
+    stmt = select(KnowledgeSuggestion).where(
+        KnowledgeSuggestion.message_id == int(message_id)
+    )
     return db.execute(stmt).scalars().first()
+
 
 # crud/chat_history.py (KnowledgeSuggestion upsert 부분만 교체해서 반영)
 def upsert_pending_knowledge_suggestion(
@@ -390,7 +432,6 @@ def upsert_pending_knowledge_suggestion(
     return obj
 
 
-
 def list_knowledge_suggestions(
     db: Session,
     *,
@@ -424,7 +465,9 @@ def list_knowledge_suggestions(
             ChatSessionInsight.session_id == KnowledgeSuggestion.session_id,
         ).where(ChatSessionInsight.channel == channel)
 
-    stmt = stmt.order_by(KnowledgeSuggestion.created_at.desc()).offset(offset).limit(limit)
+    stmt = (
+        stmt.order_by(KnowledgeSuggestion.created_at.desc()).offset(offset).limit(limit)
+    )
     return db.execute(stmt).scalars().all()
 
 
@@ -548,7 +591,9 @@ def list_keyword_daily(
     if quick_category_id is not None:
         stmt = stmt.where(ChatKeywordDaily.quick_category_id == int(quick_category_id))
 
-    stmt = stmt.order_by(ChatKeywordDaily.count.desc(), ChatKeywordDaily.keyword.asc()).limit(int(top_n))
+    stmt = stmt.order_by(
+        ChatKeywordDaily.count.desc(), ChatKeywordDaily.keyword.asc()
+    ).limit(int(top_n))
     return db.execute(stmt).scalars().all()
 
 
@@ -619,7 +664,9 @@ def delete_keyword_daily_range(
     channel: Optional[str] = None,
     quick_category_id: Optional[int] = None,
 ) -> int:
-    q = db.query(ChatKeywordDaily).filter(ChatKeywordDaily.dt >= date_from, ChatKeywordDaily.dt <= date_to)
+    q = db.query(ChatKeywordDaily).filter(
+        ChatKeywordDaily.dt >= date_from, ChatKeywordDaily.dt <= date_to
+    )
     if channel:
         q = q.filter(ChatKeywordDaily.channel == channel)
     if quick_category_id is not None:
@@ -635,13 +682,11 @@ __all__ = [
     "upsert_session_insight",
     "list_session_insights",
     "count_session_insights",
-
     # message insight
     "get_message_insight",
     "ensure_message_insight",
     "upsert_message_insight",
     "list_message_insights",
-
     # knowledge suggestion
     "get_knowledge_suggestion",
     "get_knowledge_suggestion_by_message",
@@ -650,7 +695,6 @@ __all__ = [
     "count_knowledge_suggestions",
     "mark_knowledge_suggestion_ingested",
     "mark_knowledge_suggestion_deleted",
-
     # keyword daily
     "list_keyword_daily",
     "upsert_keyword_daily_set",
