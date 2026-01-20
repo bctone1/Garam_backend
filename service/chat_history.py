@@ -187,6 +187,9 @@ def _is_failed_assistant_message(msg: Message) -> bool:
         return False
 
     ex = (msg.extra_data or {}) if isinstance(msg.extra_data, dict) else {}
+    status = str(ex.get("status") or "").strip().lower()
+    if status and status != "ok":
+        return True
     if bool(ex.get("no_context")) or bool(ex.get("need_clarify")) or bool(ex.get("retrieval_failed")):
         return True
 

@@ -38,6 +38,8 @@ except Exception:
 log = logging.getLogger("api_cost")
 
 MAX_CTX_CHARS = 12000  # qa_chain 기본값과 동일
+PARENT_PREFIX = "[PARENT]"
+CHILD_PREFIX = "[CHILD]"
 
 
 def _update_last_user_vector(db: Session, session_id: int, vector: Iterable[float]) -> None:
@@ -68,6 +70,7 @@ def _retrieve_sources_and_context(
 
     sources: List[QASource] = []
     context_lines: list[str] = []
+    valid_parent_child = 0
     for c in chunks:
         cid = getattr(c, "id", None)
         kid = getattr(c, "knowledge_id", None)
@@ -80,6 +83,8 @@ def _retrieve_sources_and_context(
             f"[CHUNK id={cid} knowledge_id={kid} page_id={pid} score={score_repr}]"
         )
         chunk_text = getattr(c, "chunk_text", "") or ""
+        if PARENT_PREFIX in chunk_text and CHILD_PREFIX in chunk_text:
+            valid_parent_child += 1
         context_lines.append(chunk_text)
         sources.append(
             QASource(
@@ -92,7 +97,12 @@ def _retrieve_sources_and_context(
         )
 
     context_text = ("\n\n".join(context_lines))[:MAX_CTX_CHARS]
-    meta = {"max_sim": max_sim, "has_chunks": bool(chunks)}
+    meta = {
+        "max_sim": max_sim,
+        "has_chunks": bool(chunks),
+        "chunk_count": len(chunks),
+        "valid_parent_child_count": valid_parent_child,
+    }
     return sources, context_text, meta
 
 
@@ -158,7 +168,13 @@ def _run_qa(
 
     min_score = float(getattr(config, "RAG_MIN_SCORE", 0.12))
     max_sim = meta.get("max_sim")
-    if not meta.get("has_chunks") or (max_sim is not None and float(max_sim) < min_score):
+    valid_parent_child_count = int(meta.get("valid_parent_child_count") or 0)
+    enforce_parent_child = bool(getattr(config, "USE_PARENT_CHILD_CHUNKING", True))
+    if (
+        not meta.get("has_chunks")
+        or (max_sim is not None and float(max_sim) < min_score)
+        or (enforce_parent_child and valid_parent_child_count == 0)
+    ):
         return QAResponse(
             status="no_knowledge",
             answer="지식베이스에서 근거를 찾지 못했습니다. 질문을 조금 더 구체적으로 알려주세요.",

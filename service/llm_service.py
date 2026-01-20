@@ -331,6 +331,22 @@ def _record_user_message_and_update_insights(
     db.flush()
 
 
+def _coerce_policy_refusal_status(resp: QAResponse) -> None:
+    if getattr(resp, "status", None) != "ok":
+        return
+    answer = str(getattr(resp, "answer", "") or "")
+    if not answer:
+        return
+    refusal_patterns = [
+        re.compile(r"제공할\s*수\s*없", re.IGNORECASE),
+        re.compile(r"기술\s*지원\s*범위", re.IGNORECASE),
+        re.compile(r"지원\s*범위.*넘어", re.IGNORECASE),
+    ]
+    if any(p.search(answer) for p in refusal_patterns):
+        resp.status = "no_knowledge"
+        resp.reason_code = getattr(resp, "reason_code", None) or "OUT_OF_SCOPE"
+
+
 def ask_in_session_service(db: Session, *, session_id: int, payload: ChatQARequest) -> QAResponse:
     _ensure_session(db, session_id)
 
@@ -377,6 +393,7 @@ def ask_in_session_service(db: Session, *, session_id: int, payload: ChatQAReque
         style=payload.style,
         few_shot_profile=few_shot_profile,
     )
+    _coerce_policy_refusal_status(resp)
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
     if resp is None:
@@ -535,6 +552,7 @@ def clova_stt_service(
         style=style,
         few_shot_profile=few_shot_profile,
     )
+    _coerce_policy_refusal_status(resp)
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
     if resp is None:
