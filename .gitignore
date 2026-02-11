@@ -7,3 +7,4 @@ myenv/
 
 pycache/
 *pyc
+.claude
