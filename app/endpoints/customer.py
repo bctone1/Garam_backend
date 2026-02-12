@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import csv
 import io
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, status
 from sqlalchemy.orm import Session
@@ -60,6 +59,16 @@ def list_customers(
     db: Session = Depends(get_db),
 ):
     return crud.list_customers(db, offset=offset, limit=limit)
+
+
+@router.get("/search", response_model=list[CustomerResponse])
+def search_customers(
+    q: str = Query(..., min_length=1, description="사업자명 또는 사업자번호 검색어"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    return crud.search_by_keyword(db, q, offset=offset, limit=limit)
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)

@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from models.customer import Customer
@@ -58,6 +58,26 @@ def bulk_create_from_csv(db: Session, rows: List[Dict[str, Any]]) -> List[Custom
 
     db.commit()
     return created
+
+
+def search_by_keyword(
+    db: Session, keyword: str, *, offset: int = 0, limit: int = 50
+) -> List[Customer]:
+    """사업자명 또는 사업자번호 ILIKE 부분 매칭 검색."""
+    pattern = f"%{keyword}%"
+    stmt = (
+        select(Customer)
+        .where(
+            or_(
+                Customer.business_name.ilike(pattern),
+                Customer.business_number.ilike(pattern),
+            )
+        )
+        .order_by(Customer.id.desc())
+        .offset(offset)
+        .limit(min(limit, 100))
+    )
+    return db.execute(stmt).scalars().all()
 
 
 def list_customers(
