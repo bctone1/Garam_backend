@@ -43,7 +43,7 @@ class InquiryAttachmentResponse(InquiryAttachmentBase):
 # Inquiry
 # -------------------------------
 class InquiryBase(BaseModel):
-    business_name: str
+    business_name: Optional[str] = None
     business_number: Optional[str] = None
 
     phone: Optional[str] = None
@@ -87,6 +87,7 @@ class InquiryUpdate(BaseModel):
 
 class InquiryResponse(InquiryBase):
     id: int
+    customer_id: Optional[int] = None
     created_at: datetime
     assigned_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -163,3 +164,5 @@ class HistoryNoteIn(BaseModel):
     admin_id: Optional[int] = None
     details: Optional[str] = None
     action: Optional[str] = None
+
+

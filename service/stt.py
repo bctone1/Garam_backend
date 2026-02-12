@@ -7,8 +7,6 @@ import tempfile
 import wave
 from typing import Optional
 
-import requests
-
 
 def ensure_wav_16k_mono(data: bytes, content_type: str) -> bytes:
     """
@@ -121,38 +119,27 @@ def probe_duration_seconds(data: bytes) -> float:
                 pass
 
 
-def clova_transcribe(wav_16k_mono: bytes, lang: str) -> str:
+def openai_transcribe(wav_16k_mono: bytes, lang: str) -> str:
     """
-    CLOVA STT 호출. 환경변수:
-    - CLOVA_STT_URL
-    - CLOVA_STT_API_KEY_ID
-    - CLOVA_STT_API_KEY
+    OpenAI gpt-4o-mini-transcribe 모델로 STT 호출.
+    lang: "ko-KR" → "ko" 형태로 변환하여 전달.
     """
-    url = os.getenv("CLOVA_STT_URL")
-    key_id = os.getenv("CLOVA_STT_API_KEY_ID")
-    key = os.getenv("CLOVA_STT_API_KEY")
-    if not url or not key_id or not key:
-        raise RuntimeError("CLOVA STT env missing: CLOVA_STT_URL / CLOVA_STT_API_KEY_ID / CLOVA_STT_API_KEY")
+    import io
+    from openai import OpenAI
 
-    headers = {
-        "Content-Type": "application/octet-stream",
-        "X-NCP-APIGW-API-KEY-ID": key_id,
-        "X-NCP-APIGW-API-KEY": key,
-    }
+    api_key = os.getenv("OPENAI_API")
+    if not api_key:
+        raise RuntimeError("OPENAI_API env missing")
 
-    # URL에 lang 파라미터가 이미 포함된 형태도 있어서, 둘 다 안전하게 처리
-    params = {}
-    if "lang=" not in url:
-        params["lang"] = lang
+    client = OpenAI(api_key=api_key)
+    buf = io.BytesIO(wav_16k_mono)
+    buf.name = "audio.wav"
+    resp = client.audio.transcriptions.create(
+        model="gpt-4o-mini-transcribe",
+        file=buf,
+        language=lang[:2],  # "ko-KR" → "ko"
+        response_format="json",
+    )
+    return resp.text.strip()
 
-    r = requests.post(url, headers=headers, params=params, data=wav_16k_mono, timeout=30)
-    if r.status_code >= 400:
-        raise RuntimeError(f"clova stt http {r.status_code}: {r.text}")
 
-    # 보통 {"text": "..."} 형태
-    try:
-        j = r.json()
-        return str(j.get("text") or j.get("result") or "")
-    except Exception:
-        # 혹시 plain text로 오는 경우
-        return (r.text or "").strip()

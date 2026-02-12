@@ -10,8 +10,8 @@ from database.session import get_db
 from schemas.llm import ChatQARequest, QAResponse, STTResponse
 from service.llm_service import (
     ask_in_session_service,
-    clova_stt_service,
     list_session_messages_service,
+    stt_service,
 )
 
 router = APIRouter(prefix="/llm", tags=["LLM"])
@@ -22,8 +22,8 @@ def ask_in_session(session_id: int, payload: ChatQARequest, db: Session = Depend
     return ask_in_session_service(db, session_id=session_id, payload=payload)
 
 
-@router.post("/clova_stt", response_model=Union[STTResponse, QAResponse])
-async def clova_stt(
+@router.post("/stt", response_model=Union[STTResponse, QAResponse])
+async def stt(
     file: UploadFile = File(...),
     lang: str = Form("ko-KR"),
     db: Session = Depends(get_db),
@@ -39,7 +39,7 @@ async def clova_stt(
 ):
     raw = await file.read()
     content_type = file.content_type or ""
-    return clova_stt_service(
+    return stt_service(
         db,
         raw=raw,
         content_type=content_type,

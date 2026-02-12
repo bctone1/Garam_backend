@@ -22,6 +22,12 @@ class Inquiry(Base):
     business_name = Column(String, nullable=False)
     business_number = Column(String, nullable=True)
 
+    customer_id = Column(
+        BigInteger,
+        ForeignKey("customer.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     phone = Column(String)
     content = Column(Text, nullable=False)
 
@@ -91,6 +97,8 @@ class Inquiry(Base):
         order_by="InquiryHistory.id.asc()",
     )
 
+    customer = relationship("Customer", foreign_keys=[customer_id])
+
     attachments = relationship(
         "InquiryAttachment",
         back_populates="inquiry",
@@ -154,6 +162,7 @@ class Inquiry(Base):
         Index("idx_inquiry_assigned_by_created", "assigned_by_admin_id", "created_at"),
         Index("idx_inquiry_delegated_from_created", "delegated_from_admin_id", "created_at"),
         Index("idx_inquiry_completed_by_created", "completed_by_admin_id", "created_at"),
+        Index("idx_inquiry_customer_id", "customer_id"),
     )
 
 

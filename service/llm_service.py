@@ -14,15 +14,15 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
 from core import config
-from core.pricing import ClovaSttUsageEvent, estimate_clova_stt, normalize_usage_stt
+from core.pricing import estimate_whisper_stt
 from crud import api_cost as crud_cost
 from crud import chat as crud_chat
 from crud import chat_history as crud_chat_history
 from langchain_service.llm.runner import _run_qa
 from schemas.llm import ChatQARequest, QAResponse, STTResponse
 from service.stt import (
-    clova_transcribe,
     ensure_wav_16k_mono,
+    openai_transcribe,
     probe_duration_seconds,
     wav_duration_seconds,
 )
@@ -452,7 +452,7 @@ def ask_in_session_service(db: Session, *, session_id: int, payload: ChatQAReque
 
 
 
-def clova_stt_service(
+def stt_service(
     db: Session,
     *,
     raw: bytes,
@@ -470,7 +470,7 @@ def clova_stt_service(
     wav = ensure_wav_16k_mono(raw, content_type)
 
     # 1) STT
-    text = clova_transcribe(wav, lang).strip()
+    text = openai_transcribe(wav, lang).strip()
     if not text:
         raise HTTPException(status_code=422, detail="empty transcription")
 
@@ -483,17 +483,15 @@ def clova_stt_service(
         secs = 6.0
 
     try:
-        summary = estimate_clova_stt([ClovaSttUsageEvent(mode="api", audio_seconds=float(secs))])
-        usage = normalize_usage_stt(summary.raw_seconds)
-        usd = summary.price_usd or Decimal("0")
+        usd = estimate_whisper_stt(float(secs), model="gpt-4o-mini-transcribe")
         crud_cost.add_event(
             db,
             ts_utc=datetime.now(timezone.utc),
             product="stt",
-            model=getattr(config, "DEFAULT_STT_MODEL", "CLOVA_STT"),
+            model="gpt-4o-mini-transcribe",
             llm_tokens=0,
             embedding_tokens=0,
-            audio_seconds=int(usage["audio_seconds"]),
+            audio_seconds=int(secs),
             cost_usd=usd,
         )
     except Exception as e:

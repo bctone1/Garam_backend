@@ -1,6 +1,7 @@
 # garam_backend/models/__init__.py
 
 from models import admin_user
+from models import customer
 from models import inquiry
 from models import chat
 from models import knowledge
@@ -23,4 +24,5 @@ __all__ = [
     "system",
     "model",
     "chat_history",
+    "customer",
 ]

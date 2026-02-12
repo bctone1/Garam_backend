@@ -2,8 +2,6 @@
 import os
 from langchain_openai import ChatOpenAI
 import core.config as config
-from pydantic import SecretStr
-
 
 def _pick_key(*candidates):
     for key in candidates:
@@ -59,38 +57,3 @@ def get_llm(
     else:
         raise ValueError(f"지원되지 않는 제공자: {provider}")
 
-
-def get_backend_agent(
-    provider: str = "openai",
-    model: str | None = None,
-    **kwargs,
-):
-    if provider == "openai":
-        key = _pick_key(
-            getattr(config, "EMBEDDING_API", None),
-            getattr(config, "OPENAI_API", None),
-            os.getenv("OPENAI_API"),
-        )
-        if not key:
-            raise RuntimeError("EMBEDDING_API/OPENAI_API 키가 설정되지 않았습니다.")
-        return ChatOpenAI(
-            model=model or config.FRIENDLI_MODELS,
-            api_key=key,
-            temperature=0.7,
-            **kwargs,
-        )
-
-    elif provider in ("friendli", "lgai"):
-        key = getattr(config, "FRIENDLI_API", None)
-        if not key:
-            raise RuntimeError("FRIENDLI_API 키가 설정되지 않았습니다.")
-        return ChatOpenAI(
-            model=model or config.FRIENDLI_MODELS,
-            api_key=key,
-            base_url=config.FRIENDLI_BASE_URL,
-            temperature=0.7,
-            **kwargs,
-        )
-
-    else:
-        raise ValueError(f"지원되지 않는 제공자: {provider}")

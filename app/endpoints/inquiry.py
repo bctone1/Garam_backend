@@ -60,30 +60,38 @@ def get_inquiry_list(
 # -------- CRUD (고객 문의 접수: multipart/form-data) --------
 @router.post("/", response_model=InquiryResponse, status_code=status.HTTP_201_CREATED)
 def create_inquiry(
-    business_name: str = Form(...),
+    business_name: Optional[str] = Form(None),
     content: str = Form(...),
     business_number: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
-    inquiry_type: InquiryType = Form("other"),
+    inquiry_type: Optional[str] = Form(None),
     files: Optional[List[UploadFile]] = File(None, description="최대 이미지 3장"),
 
     db: Session = Depends(get_db),
 ):
+    # 빈 문자열 → None 정규화 (multipart form에서 빈 값이 "" 로 전송됨)
+    business_name = business_name.strip() or None if business_name else None
+    business_number = business_number.strip() or None if business_number else None
+    phone = phone.strip() or None if phone else None
+
     files = files or []
     if len(files) > MAX_ATTACHMENTS:
         raise HTTPException(status_code=400, detail=f"attachments max {MAX_ATTACHMENTS}")
 
-    # 1) 문의 생성
-    obj = crud.create(
-        db,
-        {
-            "business_name": business_name,
-            "business_number": business_number,
-            "phone": phone,
-            "content": content,
-            "inquiry_type": inquiry_type,
-        },
-    )
+    # 1) 문의 생성 (inquiry_type 정규화는 crud._normalize_inquiry_type에서 처리)
+    try:
+        obj = crud.create(
+            db,
+            {
+                "business_name": business_name,
+                "business_number": business_number,
+                "phone": phone,
+                "content": content,
+                "inquiry_type": inquiry_type,
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # 2) 파일 있으면 로컬 저장 + attachment 레코드 추가
     if files:

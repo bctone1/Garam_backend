@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 import core.config as config
 from models.inquiry import Inquiry, InquiryHistory, InquiryAttachment, Notification
 from models.admin_user import AdminUser  # 이름 해석용
+from crud.customer import get_by_business_number, clean_business_number
 from service.ws_manager import ws_manager
 
 try:
@@ -84,6 +85,7 @@ def serialize_inquiry(inquiry: Inquiry):
         "id": inquiry.id,
         "businessName": inquiry.business_name,
         "businessNumber": inquiry.business_number,
+        "customerId": getattr(inquiry, "customer_id", None),
         "phone": inquiry.phone,
         "content": inquiry.content,
         "status": inquiry.status,
@@ -379,6 +381,24 @@ def create(db: Session, data: dict) -> Inquiry:
         data["customer_satisfaction"] = None
 
     data["inquiry_type"] = _normalize_inquiry_type(data.get("inquiry_type"))
+
+    # customer 매칭: business_number가 있으면 customer 테이블에서 조회
+    raw_bn = data.get("business_number")
+    if raw_bn:
+        cleaned_bn = clean_business_number(raw_bn)
+        if cleaned_bn:
+            data["business_number"] = cleaned_bn
+            customer = get_by_business_number(db, cleaned_bn)
+            if customer:
+                data["customer_id"] = customer.id
+                if customer.business_name:
+                    data["business_name"] = customer.business_name
+                if customer.phone:
+                    data["phone"] = customer.phone
+
+    # business_name 최종 검증
+    if not data.get("business_name"):
+        raise ValueError("business_name is required (직접 입력 또는 사업자번호 매칭)")
 
     # assignee/assigned_at 일관성
     if (data.get("assignee_admin_id") is None) != (data.get("assigned_at") is None):

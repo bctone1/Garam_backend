@@ -1,9 +1,6 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
-from math import ceil
-from typing import List, Optional, Iterable
+from typing import Optional, Iterable
 
 import logging
 
@@ -135,78 +132,9 @@ def normalize_usage_llm(
     return {"llm_tokens": max(0, int(total_tokens)), "embedding_tokens": 0, "audio_seconds": 0}
 
 
-# ===== CLOVA STT 사용량 이벤트/요약 =====
-@dataclass
-class ClovaSttUsageEvent:
-    mode: str                               # "short_sync" | "live_grpc" 등
-    audio_seconds: float = 0.0
-    started_at: Optional[datetime] = None
-    ended_at: Optional[datetime] = None
-    meta: Optional[dict] = None
 
-
-@dataclass
-class ClovaSttUsageSummary:
-    raw_seconds: float
-    bill_seconds: int
-    price_krw: int
-    price_usd: Optional[Decimal] = None
-
-
-# ===== STT 내부 헬퍼 =====
-def _effective_seconds(e: ClovaSttUsageEvent) -> float:
-    if e.audio_seconds and e.audio_seconds > 0:
-        return float(e.audio_seconds)
-    if e.started_at and e.ended_at:
-        return max(0.0, (e.ended_at - e.started_at).total_seconds())
-    return 0.0
-
-
-def _billable_seconds(seconds: float) -> int:
-    unit = int(getattr(config, "CLOVA_STT_BILLING_UNIT_SECONDS", 15))
-    if seconds <= 0:
-        return 0
-    return int(ceil(seconds / unit) * unit)
-
-
-def _price_krw_for_bill_seconds(bill_secs: int) -> int:
-    unit = int(getattr(config, "CLOVA_STT_BILLING_UNIT_SECONDS", 15))
-    per_unit_krw = int(getattr(config, "CLOVA_STT_PRICE_PER_UNIT_KRW", 0))
-    units = bill_secs // unit
-    return int(units * per_unit_krw)
-
-
-def _krw_to_usd(krw: int) -> Optional[Decimal]:
-    fx = getattr(config, "FX_KRW_PER_USD", None)
-    if not fx:
-        return None
-    q = Decimal(10) ** -int(getattr(config, "COST_PRECISION", 6))
-    return (Decimal(int(krw)) / Decimal(str(fx))).quantize(q, rounding=ROUND_HALF_UP)
-
-
-# ===== STT 공개 API =====
-def estimate_clova_stt(events: List[ClovaSttUsageEvent]) -> ClovaSttUsageSummary:
-    total_raw = 0.0
-    total_bill = 0
-    total_price = 0
-
-    for e in events:
-        secs = _effective_seconds(e)
-        total_raw += secs
-        bsecs = _billable_seconds(secs)
-        total_bill += bsecs
-        total_price += _price_krw_for_bill_seconds(bsecs)
-
-    total_raw = round(total_raw, 2)
-    usd = _krw_to_usd(total_price)
-    return ClovaSttUsageSummary(
-        raw_seconds=total_raw,
-        bill_seconds=total_bill,
-        price_krw=int(total_price),
-        price_usd=usd,
-    )
-
-
-def normalize_usage_stt(raw_seconds: float) -> dict:
-    bsecs = _billable_seconds(raw_seconds)
-    return {"llm_tokens": 0, "embedding_tokens": 0, "audio_seconds": int(bsecs)}
+def estimate_whisper_stt(audio_seconds: float, model: str = "gpt-4o-mini-transcribe") -> Decimal:
+    """OpenAI Whisper 계열 STT 비용: (seconds / 60) * per_minute_usd"""
+    per_min = _require_price("stt", model, "per_minute_usd")
+    usd = (Decimal(str(audio_seconds)) / Decimal("60")) * per_min
+    return _quantize_usd(usd)

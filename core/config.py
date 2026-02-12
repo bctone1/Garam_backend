@@ -2,7 +2,6 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-import base64
 
 # 0) .env 로드
 load_dotenv()
@@ -52,17 +51,6 @@ CLAUDE_API = os.getenv("CLAUDE_API")
 GOOGLE_API = os.getenv("GOOGLE_API")
 FRIENDLI_API = os.getenv("FRIENDLI_API")
 EMBEDDING_API = os.getenv("EMBEDDING_API")
-SEARCH_API = os.getenv("SEARCH_API")
-
-UPSTAGE_API = os.getenv("UPSTAGE_API")
-
-CLOVA_STT_ID= os.getenv("CLOVA_STT_ID")
-CLOVA_STT_SECRET= os.getenv("CLOVA_STT_SECRET")
-CLOVA_STT_URL = "https://clovasr.naverncp.com/recog/v1/stt"
-
-# 인증 헤더용 Base64 토큰 생성
-AUTH_TOKEN = base64.b64encode(f"{CLOVA_STT_ID}:{CLOVA_STT_SECRET}".encode()).decode()
-AUTH_HEADER = ("authorization", f"Basic {AUTH_TOKEN}")
 
 # 4) LangSmith
 LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING")  # 문자열 "true"/"false"
@@ -89,9 +77,8 @@ VECTOR_DB_CONNECTION = os.getenv(
     f"{DB}://{DB_USER}:{DB_PASSWORD}@{DB_SERVER}:{DB_PORT}/{DB_NAME}" if all([DB_USER, DB_PASSWORD, DB_SERVER, DB_NAME]) else ""
 )
 
-# 7) 임베딩·채팅·Chroma
+# 7) 임베딩
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-CHROMA_PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", "./chroma_db")
 
 # 7-1) Upload / RAG: Parent-Child chunking
 USE_LLM_PREVIEW = _env_bool("USE_LLM_PREVIEW", False)
@@ -134,16 +121,9 @@ LLM_MODEL    = os.getenv("LLM_MODEL", DEFAULT_CHAT_MODEL)
 EXAONE_ENDPOINT = os.getenv("EXAONE_ENDPOINT")
 EXAONE_URL = os.getenv("EXAONE_URL", "https://api.friendli.ai/dedicated/v1")
 
-# 10) 관리자·문자
-COOL_SMS_API = os.getenv("COOL_SMS_API")
-COOL_SMS_SECRET = os.getenv("COOL_SMS_SECRET")
-ADMIN_PHONE_NUMBER = os.getenv("ADMIN_PHONE_NUMBER")
-
-# 11) Friendli·Ollama
-TEAM_ID = os.getenv("TEAM_ID")
+# 10) Friendli
 FRIENDLI_TOKEN = os.getenv("FRIENDLI_TOKEN")
 FRIENDLI_BASE_URL = os.getenv("FRIENDLI_BASE_URL")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 
 # 12) cost 설정
 API_PRICING = {
@@ -155,7 +135,7 @@ API_PRICING = {
         "gpt-4o-mini": {"per_1k_token_usd": 0.00004},    # 대략적으로 잡음
     },
     "stt": {
-        "CLOVA_STT": {"per_second_usd": 0.0002},  # 엄밀히 0.00019(환율차로 무의미)
+        "gpt-4o-mini-transcribe": {"per_minute_usd": 0.003},
     },
 }
 
@@ -167,9 +147,5 @@ LLM_TOKEN_MODE = "merged"
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_LLM_MODEL = "gpt-4o-"
-DEFAULT_STT_MODEL = "CLOVA_STT"
+DEFAULT_STT_MODEL = "gpt-4o-mini-transcribe"
 
-# CLOVA STT 과금 규칙
-CLOVA_STT_BILLING_UNIT_SECONDS = 6   # 6초 단위 과금
-CLOVA_STT_PRICE_PER_UNIT_KRW = 1.6      # 15초당 4원
-FX_KRW_PER_USD = 1400                 # 원→달러 환산. 미사용 시 None
