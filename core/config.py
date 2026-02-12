@@ -156,6 +156,7 @@ API_PRICING = {
     },
     "stt": {
         "CLOVA_STT": {"per_second_usd": 0.0002},  # 엄밀히 0.00019(환율차로 무의미)
+        "gpt-4o-mini-transcribe": {"per_minute_usd": 0.003},
     },
 }
 
@@ -167,7 +168,7 @@ LLM_TOKEN_MODE = "merged"
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_LLM_MODEL = "gpt-4o-"
-DEFAULT_STT_MODEL = "CLOVA_STT"
+DEFAULT_STT_MODEL = "gpt-4o-mini-transcribe"
 
 # CLOVA STT 과금 규칙
 CLOVA_STT_BILLING_UNIT_SECONDS = 6   # 6초 단위 과금

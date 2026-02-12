@@ -15,6 +15,7 @@ from core.pricing import (
     estimate_llm_cost_usd,
     estimate_embedding_cost_usd,
     estimate_clova_stt,
+    estimate_whisper_stt,
     ClovaSttUsageEvent,
     normalize_usage_stt,
 )
@@ -100,12 +101,15 @@ def add_event(payload: AddEventRequest, db: Session = Depends(get_db)):
                 total_tokens=int(payload.embedding_tokens),
             )
         elif payload.product == "stt":
-            # STT는 원화 규칙 기반 → USD 환산 설정이 없으면 0일 수 있음
-            ev = ClovaSttUsageEvent(mode="api", audio_seconds=float(payload.audio_seconds))
-            summary = estimate_clova_stt([ev])
-            cost_usd = summary.price_usd or Decimal("0")
-            # billable seconds로 치환
-            payload.audio_seconds = normalize_usage_stt(summary.raw_seconds)["audio_seconds"]
+            if payload.model and payload.model != "CLOVA_STT":
+                # OpenAI Whisper 계열 (gpt-4o-mini-transcribe 등)
+                cost_usd = estimate_whisper_stt(float(payload.audio_seconds), model=payload.model)
+            else:
+                # CLOVA STT 레거시
+                ev = ClovaSttUsageEvent(mode="api", audio_seconds=float(payload.audio_seconds))
+                summary = estimate_clova_stt([ev])
+                cost_usd = summary.price_usd or Decimal("0")
+                payload.audio_seconds = normalize_usage_stt(summary.raw_seconds)["audio_seconds"]
 
     crud.add_event(
         db,

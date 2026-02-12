@@ -207,6 +207,13 @@ def estimate_clova_stt(events: List[ClovaSttUsageEvent]) -> ClovaSttUsageSummary
     )
 
 
+def estimate_whisper_stt(audio_seconds: float, model: str = "gpt-4o-mini-transcribe") -> Decimal:
+    """OpenAI Whisper 계열 STT 비용: (seconds / 60) * per_minute_usd"""
+    per_min = _require_price("stt", model, "per_minute_usd")
+    usd = (Decimal(str(audio_seconds)) / Decimal("60")) * per_min
+    return _quantize_usd(usd)
+
+
 def normalize_usage_stt(raw_seconds: float) -> dict:
     bsecs = _billable_seconds(raw_seconds)
     return {"llm_tokens": 0, "embedding_tokens": 0, "audio_seconds": int(bsecs)}
