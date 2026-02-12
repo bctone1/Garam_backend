@@ -19,6 +19,13 @@ class CustomerResponse(BaseModel):
         from_attributes = True
 
 
+class CustomerCreate(BaseModel):
+    business_name: str
+    business_number: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+
 class CustomerUpdate(BaseModel):
     business_number: Optional[str] = None
     business_name: Optional[str] = None

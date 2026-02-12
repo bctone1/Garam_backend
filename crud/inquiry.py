@@ -396,6 +396,10 @@ def create(db: Session, data: dict) -> Inquiry:
                 if customer.phone:
                     data["phone"] = customer.phone
 
+    # business_name 최종 검증
+    if not data.get("business_name"):
+        raise ValueError("business_name is required (직접 입력 또는 사업자번호 매칭)")
+
     # assignee/assigned_at 일관성
     if (data.get("assignee_admin_id") is None) != (data.get("assigned_at") is None):
         data["assignee_admin_id"] = None

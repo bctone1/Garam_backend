@@ -43,7 +43,7 @@ class InquiryAttachmentResponse(InquiryAttachmentBase):
 # Inquiry
 # -------------------------------
 class InquiryBase(BaseModel):
-    business_name: str
+    business_name: Optional[str] = None
     business_number: Optional[str] = None
 
     phone: Optional[str] = None

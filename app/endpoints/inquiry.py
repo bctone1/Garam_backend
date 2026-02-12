@@ -60,7 +60,7 @@ def get_inquiry_list(
 # -------- CRUD (고객 문의 접수: multipart/form-data) --------
 @router.post("/", response_model=InquiryResponse, status_code=status.HTTP_201_CREATED)
 def create_inquiry(
-    business_name: str = Form(...),
+    business_name: Optional[str] = Form(None),
     content: str = Form(...),
     business_number: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
@@ -74,16 +74,19 @@ def create_inquiry(
         raise HTTPException(status_code=400, detail=f"attachments max {MAX_ATTACHMENTS}")
 
     # 1) 문의 생성
-    obj = crud.create(
-        db,
-        {
-            "business_name": business_name,
-            "business_number": business_number,
-            "phone": phone,
-            "content": content,
-            "inquiry_type": inquiry_type,
-        },
-    )
+    try:
+        obj = crud.create(
+            db,
+            {
+                "business_name": business_name,
+                "business_number": business_number,
+                "phone": phone,
+                "content": content,
+                "inquiry_type": inquiry_type,
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # 2) 파일 있으면 로컬 저장 + attachment 레코드 추가
     if files:

@@ -5,12 +5,12 @@ import csv
 import io
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from database.session import get_db
 from crud import customer as crud
-from schemas.customer import CustomerResponse, CustomerUpdate, CsvUploadResponse
+from schemas.customer import CustomerResponse, CustomerCreate, CustomerUpdate, CsvUploadResponse
 
 router = APIRouter(prefix="/customer", tags=["Customer"])
 
@@ -21,6 +21,14 @@ _CSV_COL_MAP = {
     "전화번호": "phone",
     "주소": "address",
 }
+
+
+@router.post("/", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
+def create_customer(
+    payload: CustomerCreate,
+    db: Session = Depends(get_db),
+):
+    return crud.create(db, payload.model_dump())
 
 
 @router.post("/upload_csv", response_model=CsvUploadResponse)
@@ -72,3 +80,10 @@ def update_customer(
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
     return obj
+
+
+@router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+    if not crud.delete(db, customer_id):
+        raise HTTPException(status_code=404, detail="not found")
+    return None

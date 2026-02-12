@@ -27,6 +27,20 @@ def get_by_business_number(db: Session, business_number: str) -> Optional[Custom
     return db.execute(stmt).scalars().first()
 
 
+def create(db: Session, data: Dict[str, Any]) -> Customer:
+    """단건 고객 등록."""
+    obj = Customer(
+        business_number=clean_business_number(data.get("business_number")),
+        business_name=data["business_name"],
+        phone=data.get("phone"),
+        address=data.get("address"),
+    )
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
 def bulk_create_from_csv(db: Session, rows: List[Dict[str, Any]]) -> List[Customer]:
     """
     CSV 일괄 등록. 한 트랜잭션으로 처리 (실패 시 전체 rollback).
@@ -60,6 +74,15 @@ def list_customers(
 
 def get(db: Session, customer_id: int) -> Optional[Customer]:
     return db.get(Customer, customer_id)
+
+
+def delete(db: Session, customer_id: int) -> bool:
+    obj = get(db, customer_id)
+    if not obj:
+        return False
+    db.delete(obj)
+    db.commit()
+    return True
 
 
 def update(db: Session, customer_id: int, data: Dict[str, Any]) -> Optional[Customer]:
