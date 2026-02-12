@@ -87,6 +87,7 @@ class InquiryUpdate(BaseModel):
 
 class InquiryResponse(InquiryBase):
     id: int
+    customer_id: Optional[int] = None
     created_at: datetime
     assigned_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

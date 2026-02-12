@@ -245,7 +245,7 @@ def search_chunks(payload: VectorSearchIn, db: Session = Depends(get_db)):
         top_k=payload.top_k,
     )
 
-@router.post("/upload", response_model=KnowledgeResponse)
+@router.post("/uploads", response_model=KnowledgeResponse)
 def upload_knowledge(
         db: Session = Depends(get_db),
         file: UploadFile = File(...)):
