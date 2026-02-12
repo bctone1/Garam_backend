@@ -526,22 +526,21 @@ def stt_service(
 
     # 세션이 있으면 ask_in_session과 동일하게 로그 남김 (+ insights)
     if session_id is not None:
-        with db.begin():
-            _record_user_message_and_update_insights(
-                db,
-                session_id=session_id,
-                content=text,
-                channel=None,  # STT endpoint에 channel 입력이 없어서 None 유지 (필요하면 endpoint에 Form 필드로 추가)
-                extra_data={
-                    "knowledge_id": knowledge_id,
-                    "top_k": top_k,
-                    "style": style,
-                    "policy_flags": flags,
-                    "few_shot_profile": few_shot_profile,
-                    "source": "voice",
-                    "lang": lang,
-                },
-            )
+        _record_user_message_and_update_insights(
+            db,
+            session_id=session_id,
+            content=text,
+            channel=None,  # STT endpoint에 channel 입력이 없어서 None 유지 (필요하면 endpoint에 Form 필드로 추가)
+            extra_data={
+                "knowledge_id": knowledge_id,
+                "top_k": top_k,
+                "style": style,
+                "policy_flags": flags,
+                "few_shot_profile": few_shot_profile,
+                "source": "voice",
+                "lang": lang,
+            },
+        )
 
     t0 = time.perf_counter()
     resp = _run_qa(
@@ -561,45 +560,44 @@ def stt_service(
         raise HTTPException(status_code=502, detail="_run_qa returned None")
 
     if session_id is not None:
-        with db.begin():
-            msg = crud_chat.create_message(
+        msg = crud_chat.create_message(
+            db,
+            session_id=session_id,
+            role="assistant",
+            content=resp.answer,
+            vector_memory=None,
+            response_latency_ms=latency_ms,
+            extra_data=jsonable_encoder(
+                {
+                    "knowledge_id": knowledge_id,
+                    "top_k": top_k,
+                    "style": style,
+                    "policy_flags": flags,
+                    "few_shot_profile": few_shot_profile,
+                    "sources": _dump_sources(resp),
+                    "source": "voice",
+                    "lang": lang,
+                    "status": resp.status,
+                    "reason_code": resp.reason_code,
+                    "retrieval_meta": getattr(resp, "retrieval_meta", None),
+                    "citations": [c.model_dump() for c in resp.citations],
+                }
+            ),
+            commit=False,
+            refresh=True,
+        )
+        if resp.status != "ok":
+            ins = crud_chat_history.ensure_session_insight(db, session_id=session_id)
+            ins.status = "failed"
+            ins.failed_reason = resp.answer[:200]
+            db.add(ins)
+            _record_failure_suggestion(
                 db,
                 session_id=session_id,
-                role="assistant",
-                content=resp.answer,
-                vector_memory=None,
-                response_latency_ms=latency_ms,
-                extra_data=jsonable_encoder(
-                    {
-                        "knowledge_id": knowledge_id,
-                        "top_k": top_k,
-                        "style": style,
-                        "policy_flags": flags,
-                        "few_shot_profile": few_shot_profile,
-                        "sources": _dump_sources(resp),
-                        "source": "voice",
-                        "lang": lang,
-                        "status": resp.status,
-                        "reason_code": resp.reason_code,
-                        "retrieval_meta": getattr(resp, "retrieval_meta", None),
-                        "citations": [c.model_dump() for c in resp.citations],
-                    }
-                ),
-                commit=False,
-                refresh=True,
+                question_text=text,
+                assistant_message=msg,
+                resp=resp,
             )
-            if resp.status != "ok":
-                ins = crud_chat_history.ensure_session_insight(db, session_id=session_id)
-                ins.status = "failed"
-                ins.failed_reason = resp.answer[:200]
-                db.add(ins)
-                _record_failure_suggestion(
-                    db,
-                    session_id=session_id,
-                    question_text=text,
-                    assistant_message=msg,
-                    resp=resp,
-                )
 
     return resp
 
