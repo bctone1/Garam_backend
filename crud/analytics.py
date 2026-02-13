@@ -1,6 +1,6 @@
 # crud/analytics.py
 from __future__ import annotations
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 _KST = ZoneInfo("Asia/Seoul")
@@ -88,8 +88,9 @@ def get_dashboard_metrics(db, *, start=None, end=None):
 
 
 def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]:
-    end = datetime.now(_KST)
-    start = end - timedelta(days=days)
+    today = datetime.now(_KST).date()
+    start = datetime.combine(today - timedelta(days=days - 1), time.min, tzinfo=_KST)
+    end = datetime.combine(today + timedelta(days=1), time.min, tzinfo=_KST)
 
     # 날짜 day 와 시간(time stamp) 를 분리
     bucket = func.date_trunc("day", ChatSession.created_at).label("ts")
@@ -123,8 +124,9 @@ def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]
 
 
 def get_hourly_usage(db: Session, *, days: int = 7) -> List[Dict[str, Any]]:
-    end = datetime.now(_KST)
-    start = end - timedelta(days=days)
+    today = datetime.now(_KST).date()
+    start = datetime.combine(today - timedelta(days=days - 1), time.min, tzinfo=_KST)
+    end = datetime.combine(today + timedelta(days=1), time.min, tzinfo=_KST)
     bucket = func.date_trunc("hour", Message.created_at).label("ts")
     rows = db.execute(
         select(bucket, func.count().label("messages"))
