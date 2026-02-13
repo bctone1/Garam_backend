@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 from typing import Optional, Literal, Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, func, text
 from sqlalchemy.orm import Session
@@ -11,25 +12,20 @@ from sqlalchemy.orm import Session
 from models.api_cost import ApiCostDaily
 
 # ===== KST 날짜 도우미 =====
-_KST = timezone(timedelta(hours=9))
+_KST = ZoneInfo("Asia/Seoul")
 
 
-def _to_utc(ts: datetime) -> datetime:
+def _to_kst_date(ts: datetime) -> date:
+    """
+    이벤트 기준 ts(UTC or tz-aware or naive)를 KST 날짜로 변환.
+    """
     if ts.tzinfo is None:
-        return ts.replace(tzinfo=timezone.utc)
-    return ts.astimezone(timezone.utc)
-
-
-def _to_kst_date(ts_utc: datetime) -> date:
-    """
-    이벤트 기준 ts(UTC or tz-aware)를 KST 날짜로 변환.
-    """
-    ts_utc = _to_utc(ts_utc)
-    return ts_utc.astimezone(_KST).date()
+        ts = ts.replace(tzinfo=_KST)
+    return ts.astimezone(_KST).date()
 
 
 def _d_today_kst() -> date:
-    return datetime.now(timezone.utc).astimezone(_KST).date()
+    return datetime.now(_KST).date()
 
 
 def _as_decimal(v: Decimal | float | int | str) -> Decimal:

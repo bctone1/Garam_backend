@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+_KST = ZoneInfo("Asia/Seoul")
 from typing import Optional, List, Tuple, Dict, Any
 
 from sqlalchemy import select, func
@@ -31,19 +34,20 @@ def _infer_channel_from_session_title(title: Optional[str]) -> Optional[str]:
     return None
 
 
-def _dt_range_utc(
+def _dt_range_kst(
     date_from: Optional[date], date_to: Optional[date]
 ) -> Tuple[Optional[datetime], Optional[datetime]]:
     """
     date_to는 inclusive로 받고, 쿼리는 [from, to+1day) 로 처리.
+    KST 기준 날짜 경계 사용.
     """
     dt_from = None
     dt_to_excl = None
     if date_from:
-        dt_from = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
+        dt_from = datetime.combine(date_from, time.min, tzinfo=_KST)
     if date_to:
         dt_to_excl = datetime.combine(
-            date_to + timedelta(days=1), time.min, tzinfo=timezone.utc
+            date_to + timedelta(days=1), time.min, tzinfo=_KST
         )
     return dt_from, dt_to_excl
 
@@ -169,7 +173,7 @@ def list_session_insights(
 ) -> List[ChatSessionInsight]:
     stmt = select(ChatSessionInsight)
 
-    dt_from, dt_to_excl = _dt_range_utc(date_from, date_to)
+    dt_from, dt_to_excl = _dt_range_kst(date_from, date_to)
     if dt_from:
         stmt = stmt.where(ChatSessionInsight.started_at >= dt_from)
     if dt_to_excl:
@@ -212,7 +216,7 @@ def count_session_insights(
 ) -> int:
     stmt = select(func.count()).select_from(ChatSessionInsight)
 
-    dt_from, dt_to_excl = _dt_range_utc(date_from, date_to)
+    dt_from, dt_to_excl = _dt_range_kst(date_from, date_to)
     if dt_from:
         stmt = stmt.where(ChatSessionInsight.started_at >= dt_from)
     if dt_to_excl:
@@ -327,7 +331,7 @@ def list_message_insights(
 ) -> List[ChatMessageInsight]:
     stmt = select(ChatMessageInsight)
 
-    dt_from, dt_to_excl = _dt_range_utc(date_from, date_to)
+    dt_from, dt_to_excl = _dt_range_kst(date_from, date_to)
     if dt_from:
         stmt = stmt.where(ChatMessageInsight.created_at >= dt_from)
     if dt_to_excl:
@@ -446,7 +450,7 @@ def list_knowledge_suggestions(
 ) -> List[KnowledgeSuggestion]:
     stmt = select(KnowledgeSuggestion)
 
-    dt_from, dt_to_excl = _dt_range_utc(date_from, date_to)
+    dt_from, dt_to_excl = _dt_range_kst(date_from, date_to)
     if dt_from:
         stmt = stmt.where(KnowledgeSuggestion.created_at >= dt_from)
     if dt_to_excl:
@@ -483,7 +487,7 @@ def count_knowledge_suggestions(
 ) -> int:
     stmt = select(func.count()).select_from(KnowledgeSuggestion)
 
-    dt_from, dt_to_excl = _dt_range_utc(date_from, date_to)
+    dt_from, dt_to_excl = _dt_range_kst(date_from, date_to)
     if dt_from:
         stmt = stmt.where(KnowledgeSuggestion.created_at >= dt_from)
     if dt_to_excl:
@@ -534,7 +538,7 @@ def mark_knowledge_suggestion_ingested(
     obj.final_answer = fa
     obj.target_knowledge_id = int(target_knowledge_id)
     obj.ingested_chunk_id = int(ingested_chunk_id)
-    obj.ingested_at = datetime.now(timezone.utc)
+    obj.ingested_at = datetime.now(_KST)
     obj.review_status = "ingested"
 
     insight = db.get(ChatSessionInsight, obj.session_id)
@@ -565,7 +569,7 @@ def mark_knowledge_suggestion_deleted(
         raise ValueError("cannot delete an ingested suggestion")
 
     obj.review_status = "deleted"
-    obj.deleted_at = datetime.now(timezone.utc)
+    obj.deleted_at = datetime.now(_KST)
 
     db.flush()
     return obj

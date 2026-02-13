@@ -6,7 +6,10 @@ import re
 import shutil
 from uuid import uuid4
 from typing import Optional, List, Dict, Any, Literal
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_KST = ZoneInfo("Asia/Seoul")
 
 from sqlalchemy import select, and_, func
 from sqlalchemy.orm import Session
@@ -43,8 +46,8 @@ REP_ADMIN_ID = 0
 # ======================
 # Utils
 # ======================
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+def _kst_now() -> datetime:
+    return datetime.now(_KST)
 
 
 def _resolve_admin_name(db: Session, admin_id: Optional[int]) -> Optional[str]:
@@ -182,7 +185,7 @@ def _publish_notification_created_sync(
             "event_type": event_type,
             "inquiry_id": inquiry_id,
             "actor_admin_id": actor_admin_id,
-            "created_at": (created_at or _utcnow()).isoformat(),
+            "created_at": (created_at or _kst_now()).isoformat(),
             "read_at": None,
             "title": title,
             "body": body,
@@ -407,7 +410,7 @@ def create(db: Session, data: dict) -> Inquiry:
 
     # 사전 할당 생성(드물겠지만) 방어: assignee 있으면 assigned_by 필수
     if data.get("assignee_admin_id") is not None:
-        data.setdefault("assigned_at", _utcnow())
+        data.setdefault("assigned_at", _kst_now())
         data.setdefault("status", "processing")
         data.setdefault("assigned_by_admin_id", REP_ADMIN_ID)
         if data.get("assigned_by_admin_id") == REP_ADMIN_ID:
@@ -415,7 +418,7 @@ def create(db: Session, data: dict) -> Inquiry:
 
     # completed로 생성하는 케이스 방어
     if data.get("status") == "completed":
-        data.setdefault("completed_at", _utcnow())
+        data.setdefault("completed_at", _kst_now())
         data.setdefault("completed_by_admin_id", data.get("assignee_admin_id") or REP_ADMIN_ID)
 
     obj = Inquiry(**data)
@@ -497,7 +500,7 @@ def update(db: Session, inquiry_id: int, data: Dict[str, Any]) -> Optional[Inqui
 
     if data.get("status") == "completed":
         if obj.completed_at is None and not data.get("completed_at"):
-            data["completed_at"] = _utcnow()
+            data["completed_at"] = _kst_now()
         if not data.get("completed_by_admin_id") and obj.completed_by_admin_id is None:
             data["completed_by_admin_id"] = obj.assignee_admin_id or REP_ADMIN_ID
 
@@ -531,7 +534,7 @@ def assign(db: Session, inquiry_id: int, admin_id: int, *, actor_admin_id: Optio
     actor_name = _resolve_admin_name(db, actor_id)
 
     obj.assignee_admin_id = admin_id
-    obj.assigned_at = _utcnow()
+    obj.assigned_at = _kst_now()
     obj.status = "processing"
 
     obj.assigned_by_admin_id = actor_id
@@ -607,7 +610,7 @@ def transfer(
     actor_name = _resolve_admin_name(db, actor_id)
 
     obj.assignee_admin_id = to_admin_id
-    obj.assigned_at = _utcnow()
+    obj.assigned_at = _kst_now()
     obj.status = "processing"
 
     obj.assigned_by_admin_id = actor_id
@@ -669,7 +672,7 @@ def set_status(
         actor_name = _resolve_admin_name(db, actor_id)
 
         if obj.completed_at is None:
-            obj.completed_at = _utcnow()
+            obj.completed_at = _kst_now()
 
         obj.completed_by_admin_id = actor_id
 

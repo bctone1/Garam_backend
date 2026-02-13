@@ -1,6 +1,9 @@
 # crud/analytics.py
 from __future__ import annotations
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+_KST = ZoneInfo("Asia/Seoul")
 from typing import Optional, List, Dict, Any
 from models.chat import ChatSession, Message
 from sqlalchemy import select, func, case, literal_column, cast, Float, and_
@@ -85,7 +88,7 @@ def get_dashboard_metrics(db, *, start=None, end=None):
 
 
 def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]:
-    end = datetime.now(timezone.utc)
+    end = datetime.now(_KST)
     start = end - timedelta(days=days)
 
     # 날짜 day 와 시간(time stamp) 를 분리
@@ -120,7 +123,7 @@ def get_daily_timeseries(db: Session, *, days: int = 30) -> List[Dict[str, Any]]
 
 
 def get_hourly_usage(db: Session, *, days: int = 7) -> List[Dict[str, Any]]:
-    end = datetime.now(timezone.utc)
+    end = datetime.now(_KST)
     start = end - timedelta(days=days)
     bucket = func.date_trunc("hour", Message.created_at).label("ts")
     rows = db.execute(
