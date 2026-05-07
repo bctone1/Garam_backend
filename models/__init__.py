@@ -9,6 +9,7 @@ from models import faq
 from models import system
 from models import model
 from models import chat_history
+from models import notice
 from .daily_dashboard import DailyDashboard
 
 from models.api_cost import ApiCostDaily
@@ -25,4 +26,5 @@ __all__ = [
     "model",
     "chat_history",
     "customer",
+    "notice",
 ]

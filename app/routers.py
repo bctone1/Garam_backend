@@ -14,6 +14,7 @@ from app.endpoints import (
     websocket,
     chat_history,
     customer,
+    notice,
 )
 
 router = APIRouter()
@@ -32,6 +33,7 @@ router.include_router(notification.router)
 router.include_router(websocket.router)
 router.include_router(chat_history.router)
 router.include_router(customer.router)
+router.include_router(notice.router)
 
 def register_routers(app: FastAPI) -> None:
     app.include_router(router)
