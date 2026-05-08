@@ -541,14 +541,6 @@ def assign(db: Session, inquiry_id: int, admin_id: int, *, actor_admin_id: Optio
     if actor_id == REP_ADMIN_ID and obj.delegated_from_admin_id is None:
         obj.delegated_from_admin_id = REP_ADMIN_ID
 
-    _add_history(
-        db,
-        inquiry_id,
-        action="assign",
-        admin_name=actor_name,
-        details=f"assignee_admin_id={admin_id}",
-    )
-
     notif = _add_notification(
         db,
         recipient_admin_id=admin_id,
@@ -616,14 +608,6 @@ def transfer(
     obj.assigned_by_admin_id = actor_id
     if actor_id == REP_ADMIN_ID and obj.delegated_from_admin_id is None:
         obj.delegated_from_admin_id = REP_ADMIN_ID
-
-    _add_history(
-        db,
-        inquiry_id,
-        action="transfer",
-        admin_name=actor_name,
-        details=f"to_admin_id={to_admin_id}",
-    )
 
     notif = _add_notification(
         db,
