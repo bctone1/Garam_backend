@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+from datetime import datetime, timezone
 from typing import Literal, Optional
 from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
@@ -12,6 +13,7 @@ from database.session import get_db
 from crud import notice as crud
 from schemas.notice import NoticeCreate, NoticeUpdate, NoticeResponse
 from core.config import UPLOAD_FOLDER
+from core.scheduler import schedule_notice_push, cancel_notice_push, push_notice_now
 
 router = APIRouter(prefix="/notices", tags=["Notice"])
 
@@ -27,9 +29,27 @@ def _safe_filename(name: str) -> str:
 StatusFilter = Literal["all", "scheduled", "active", "expired"]
 
 
+def _maybe_schedule_push(notice) -> None:
+    """공지의 is_important / start_at 상태에 따라 푸시 즉시 발송 또는 예약."""
+    if not notice or not notice.is_important:
+        return
+    now = datetime.now(timezone.utc)
+    start_at = notice.start_at
+    end_at = notice.end_at
+    # 이미 만료된 공지는 발송하지 않음
+    if end_at and end_at <= now:
+        return
+    if not start_at or start_at <= now:
+        push_notice_now(notice.id)
+    else:
+        schedule_notice_push(notice.id, start_at)
+
+
 @router.post("/", response_model=NoticeResponse, status_code=status.HTTP_201_CREATED)
 def create_notice(payload: NoticeCreate, db: Session = Depends(get_db)):
-    return crud.create(db, payload.dict(exclude_unset=True))
+    obj = crud.create(db, payload.dict(exclude_unset=True))
+    _maybe_schedule_push(obj)
+    return obj
 
 
 @router.get("/", response_model=list[NoticeResponse])
@@ -69,6 +89,9 @@ def update_notice(notice_id: int, payload: NoticeUpdate, db: Session = Depends(g
     obj = crud.update(db, notice_id, payload.dict(exclude_unset=True))
     if not obj:
         raise HTTPException(status_code=404, detail="not found")
+    # 기존 예약 취소 후 새 상태에 맞춰 재스케줄
+    cancel_notice_push(notice_id)
+    _maybe_schedule_push(obj)
     return obj
 
 
@@ -76,6 +99,7 @@ def update_notice(notice_id: int, payload: NoticeUpdate, db: Session = Depends(g
 def delete_notice(notice_id: int, db: Session = Depends(get_db)):
     if not crud.delete(db, notice_id):
         raise HTTPException(status_code=404, detail="not found")
+    cancel_notice_push(notice_id)
     return None
 
 

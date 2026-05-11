@@ -10,3 +10,6 @@ pycache/
 .claude
 .omc
 .playwright-mcp
+
+
+/.venv/

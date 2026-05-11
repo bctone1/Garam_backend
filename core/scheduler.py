@@ -99,3 +99,55 @@ def trigger_upsert_range(start: date, end: date):
             _run_upsert_for(cur)
         cur += timedelta(days=1)
         offset += 1
+
+
+# ========= 공지사항 푸시 스케줄링 =========
+
+def _notice_push_job_id(notice_id: int) -> str:
+    return f"notice_push_{notice_id}"
+
+
+def schedule_notice_push(notice_id: int, run_at: datetime) -> None:
+    """예약 게시일 도달 시 푸시 발송. 이미 등록된 잡이 있으면 교체."""
+    from services.notice_push import push_notice
+    if _SCHED and _SCHED.running:
+        _SCHED.add_job(
+            push_notice,
+            trigger="date",
+            run_date=run_at,
+            args=[notice_id],
+            id=_notice_push_job_id(notice_id),
+            replace_existing=True,
+            misfire_grace_time=600,
+        )
+        log.info("notice push 스케줄 등록: notice_id=%s, run_at=%s", notice_id, run_at)
+    else:
+        # 스케줄러 미가동 — 즉시 동기 실행 fallback
+        push_notice(notice_id)
+
+
+def cancel_notice_push(notice_id: int) -> None:
+    """예약된 푸시 취소(공지 수정/삭제 시)."""
+    if not _SCHED:
+        return
+    try:
+        _SCHED.remove_job(_notice_push_job_id(notice_id))
+        log.info("notice push 스케줄 취소: notice_id=%s", notice_id)
+    except Exception:
+        # 잡이 없거나 이미 실행됨 — 무시
+        pass
+
+
+def push_notice_now(notice_id: int) -> None:
+    """즉시 발송(또는 스케줄러에 즉시 등록)."""
+    from services.notice_push import push_notice
+    if _SCHED and _SCHED.running:
+        _SCHED.add_job(
+            push_notice,
+            trigger="date",
+            run_date=_kst_now() + timedelta(seconds=1),
+            args=[notice_id],
+            id=f"notice_push_now_{notice_id}_{_kst_now().timestamp()}",
+        )
+    else:
+        push_notice(notice_id)
