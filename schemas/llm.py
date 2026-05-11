@@ -1,7 +1,7 @@
 # schemas/llm.py
 from __future__ import annotations
 
-from typing import Optional, Literal, List
+from typing import Optional, Literal, List, Dict, Any
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 # literals
 # =========================
 StyleLiteral = Literal["professional", "friendly", "concise"]
+ChannelLiteral = Literal["web", "mobile"]
 
 
 # =========================
@@ -46,6 +47,9 @@ class ChatQARequest(PolicyFlags):
     style: Optional[StyleLiteral] = None
     few_shot_profile: Optional[str] = Field(default=None, min_length=1, max_length=200)
 
+    # 운영 규칙: web | mobile 고정 코드
+    channel: Optional[ChannelLiteral] = Field(default=None)
+
 
 class QASource(BaseModel):
     """
@@ -62,6 +66,13 @@ class QASource(BaseModel):
     text: str = Field(default="")
 
 
+class QACitation(BaseModel):
+    knowledge_id: Optional[int] = None
+    chunk_id: Optional[int] = None
+    page_id: Optional[int] = None
+    score: Optional[float] = None
+
+
 class QAResponse(BaseModel):
     """
     QA 응답 표준.
@@ -74,8 +85,13 @@ class QAResponse(BaseModel):
     answer: str
     session_id: Optional[int] = None
 
+    status: Literal["ok", "no_knowledge", "need_clarification"] = "ok"
+    reason_code: Optional[str] = None
+    citations: List[QACitation] = Field(default_factory=list)
+
     sources: List[QASource] = Field(default_factory=list)
     documents: List[QASource] = Field(default_factory=list)
+    retrieval_meta: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def _sync_sources_documents(self) -> "QAResponse":

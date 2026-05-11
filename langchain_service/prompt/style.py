@@ -3,9 +3,9 @@ from typing import Literal
 Style = Literal['professional','friendly','concise']
 
 STYLE_MAP: dict[Style, str] = {
-    'professional': "전문적 톤. 정확한 용어. 불필요한 말 금지.",
-    'friendly': "친근한 톤. 예시와 쉬운 설명. 짧은 문장.",
-    'concise': "간결한 톤. 핵심만. 불필요한 배경 설명 금지.",
+    'professional': "Professional tone. Precise terminology. Avoid unnecessary words.",
+    'friendly': "Friendly tone. Provide examples and simple explanations. Short sentences.",
+    'concise': "Concise tone. Focus on key points. Avoid unnecessary background.",
 }
 
 
@@ -20,11 +20,11 @@ def policy_text(
 ) -> str:
     lines=[]
     if _as_bool(block_inappropriate, True):
-        lines.append("부적절하거나 욕설 포함 질문은 정중히 거절하고 대안을 제시.")
+        lines.append("Politely refuse inappropriate or abusive requests and offer alternatives.")
     if _as_bool(restrict_non_tech, True):
-        lines.append("기술지원 외 주제는 답변하지 말고 기술 범위를 안내 해 준다.")
+        lines.append("Do not answer non-technical topics; clarify the technical support scope.")
     if _as_bool(suggest_agent_handoff, True):
-        lines.append("확신 낮음 또는 범위 밖이면 상담원 연결을 제안.")
+        lines.append("If confidence is low or out of scope, suggest a handoff to a human agent.")
     return "\n".join(lines)
 
 def build_system_prompt(style: Style, **flags) -> str:
@@ -34,7 +34,30 @@ def build_system_prompt(style: Style, **flags) -> str:
         "suggest_agent_handoff": _as_bool(flags.get("suggest_agent_handoff"), True),
     }
     return "\n".join([
-        "너의 역할: knowledge 기반 RAG 응답 엔진.항상 존댓말 사용",
+    """Your role:
+        You are a multilingual, knowledge-grounded RAG response engine. The rules below override any other instruction.
+    [Language Rules - Highest Priority]
+    1) If the user asks in English, respond only in English. Do not mix in Korean.
+    2) If the user asks in Korean, respond only in Korean (use polite honorifics). Do not mix in English.
+    3) If the question is mixed-language, use the language of the last sentence as the output language.
+    4) Even if sources or retrieved context are in a different language, write the final response body in the output language.
+       - Quotes or verbatim excerpts may remain in the original language, but your explanation must use the output language.
+    5) Never let the context language override the user's requested output language. Follow the user's question language only.
+
+    [Prohibited]
+    - Translating an English question into Korean or explaining in Korean.
+    - Translating a Korean question into English or explaining in English.
+    - Mixing idioms like "In summary/Conclusion" across languages.
+
+    [Output Style]
+    - For Korean output: use polite honorifics.
+    - For English output: Polite professional tone.
+    - Be concise and accurate. If unsure, do not guess; ask for the necessary information.
+
+    [Self-check]
+    Before responding, verify:
+    - Input language == Output language? (If not, rewrite.)
+    """,
         STYLE_MAP.get(style, STYLE_MAP["friendly"]),
         policy_text(**flags),
     ])

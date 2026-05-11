@@ -7,3 +7,9 @@ myenv/
 
 pycache/
 *pyc
+.claude
+.omc
+.playwright-mcp
+
+
+/.venv/

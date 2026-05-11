@@ -148,3 +148,73 @@ def retrieve_topk_hybrid(
     ids_sorted = sorted(by_id.keys(), key=score, reverse=True)
     out = [by_id[i]["chunk"] for i in ids_sorted][:top_k]
     return out
+
+
+def retrieve_topk_hybrid_with_scores(
+    db: Session,
+    *,
+    query_text: str,
+    query_vector: VectorArray,
+    knowledge_id: Optional[int] = None,
+    top_k: int = 8,
+    vector_k: int = 100,
+    trigram_k: int = 50,
+    min_trgm_similarity: float = 0.12,
+    rerank: Optional[Callable[[str, List[KnowledgeChunk]], List[KnowledgeChunk]]] = None,
+) -> tuple[List[KnowledgeChunk], dict[int, dict[str, float | None]], Optional[float]]:
+    top_k = max(1, min(int(top_k or 8), 50))
+
+    vec_pairs, trgm_pairs = retrieve_candidates_hybrid(
+        db,
+        query_text=query_text,
+        query_vector=query_vector,
+        knowledge_id=knowledge_id,
+        vector_k=vector_k,
+        trigram_k=trigram_k,
+        min_trgm_similarity=min_trgm_similarity,
+    )
+
+    by_id: dict[int, dict] = {}
+    for c, dist in vec_pairs:
+        cid = int(c.id)
+        by_id.setdefault(cid, {"chunk": c, "dist": None, "sim": None})
+        by_id[cid]["dist"] = float(dist)
+
+    for c, sim in trgm_pairs:
+        cid = int(c.id)
+        by_id.setdefault(cid, {"chunk": c, "dist": None, "sim": None})
+        by_id[cid]["sim"] = float(sim)
+
+    merged: List[KnowledgeChunk] = [v["chunk"] for v in by_id.values()]
+    if not merged:
+        return [], {}, None
+
+    if rerank is not None:
+        try:
+            ranked = rerank(query_text, merged)
+            out = ranked[:top_k]
+        except Exception as e:
+            log.warning("rerank failed, fallback to heuristic. err=%s", e)
+            out = []
+    else:
+        out = []
+
+    if not out:
+        def score(cid: int) -> tuple:
+            item = by_id[cid]
+            sim = item["sim"]
+            dist = item["dist"]
+            has_sim = 1 if sim is not None else 0
+            sim_val = float(sim) if sim is not None else 0.0
+            dist_val = float(dist) if dist is not None else 1e9
+            return (has_sim, sim_val, -dist_val)
+
+        ids_sorted = sorted(by_id.keys(), key=score, reverse=True)
+        out = [by_id[i]["chunk"] for i in ids_sorted][:top_k]
+
+    scores = {
+        cid: {"sim": by_id[cid]["sim"], "dist": by_id[cid]["dist"]}
+        for cid in by_id
+    }
+    max_sim = max((v["sim"] for v in scores.values() if v["sim"] is not None), default=None)
+    return out, scores, float(max_sim) if max_sim is not None else None

@@ -1,7 +1,10 @@
 # crud/chat.py
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_KST = ZoneInfo("Asia/Seoul")
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi.encoders import jsonable_encoder
@@ -19,8 +22,8 @@ VECTOR_DIM = 1536  # pgvector(1536)
 # =========================================================
 # helpers
 # =========================================================
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+def _kst_now() -> datetime:
+    return datetime.now(_KST)
 
 
 def _safe_json(v: Any) -> Any:
@@ -103,7 +106,7 @@ def end_session(db: Session, session_id: int, resolved: Optional[bool] = None, c
     obj = get_session(db, session_id)
     if not obj:
         return None
-    obj.ended_at = _utcnow()
+    obj.ended_at = _kst_now()
     if resolved is not None:
         obj.resolved = resolved
     db.add(obj)

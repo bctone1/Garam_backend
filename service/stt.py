@@ -121,6 +121,30 @@ def probe_duration_seconds(data: bytes) -> float:
                 pass
 
 
+def openai_transcribe(wav_16k_mono: bytes, lang: str) -> str:
+    """
+    OpenAI gpt-4o-mini-transcribe 모델로 STT 호출.
+    lang: "ko-KR" → "ko" 형태로 변환하여 전달.
+    """
+    import io
+    from openai import OpenAI
+
+    api_key = os.getenv("OPENAI_API")
+    if not api_key:
+        raise RuntimeError("OPENAI_API env missing")
+
+    client = OpenAI(api_key=api_key)
+    buf = io.BytesIO(wav_16k_mono)
+    buf.name = "audio.wav"
+    resp = client.audio.transcriptions.create(
+        model="gpt-4o-mini-transcribe",
+        file=buf,
+        language=lang[:2],  # "ko-KR" → "ko"
+        response_format="json",
+    )
+    return resp.text.strip()
+
+
 def clova_transcribe(wav_16k_mono: bytes, lang: str) -> str:
     """
     CLOVA STT 호출. 환경변수:

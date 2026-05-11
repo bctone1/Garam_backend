@@ -16,6 +16,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from crud import model as crud_model
 from service.knowledge_retrieval import retrieve_topk_hybrid
 from langchain_service.prompt.style import build_system_prompt, llm_params, STYLE_MAP
+from langchain_service.llm.translator import detect_language, needs_translation, language_label
 from langchain_service.prompt.few_shots import load_few_shot_profile, few_shot_messages
 from core import config
 
@@ -156,17 +157,24 @@ def make_qa_chain(
 
     system_txt = build_system_prompt(style=style_key, **(policy_flags or {}))
 
-    # 출력 형식 지침 + 링크 강제 규칙 추가
+    # Output format guidance + link enforcement rules
     system_txt = (
         system_txt
-        + "\n\n추가 지침:\n"
-        + "- 답변은 마크다운으로 작성해. (굵게(**), 목록(-), 번호(1.) 사용 가능)\n"
-        + "- 코드블록은 절대 사용하지 마. (``` 또는 ```json 포함 전부 금지)\n"
-        + "- JSON만 출력하는 형식은 금지야. 일반 문장 + 목록 형태로 답해.\n"
-        + "- 제공된 컨텍스트에 근거해서만 답해.\n"
-        + "- 컨텍스트 근거가 부족하면 '없음'으로 끝내지 말고, 필요한 정보를 물어보는 확인 질문(clarify)으로 전환해.\n"
-        + "- force_clarify가 True면 답변 대신 확인 질문만 해.\n"
-        + "- 다운로드/외부 링크는 컨텍스트의 [SOURCES] 섹션에 있는 URL만 그대로 사용해.\n"
+        + "\n\nAdditional instructions:\n"
+        + "- Always respond in Markdown (no code fences).\n"
+        + "- Append a final HTML comment block with metadata in this format:\n"
+        + "  <!--\n"
+        + "  STATUS: ok|no_knowledge|need_clarification\n"
+        + "  REASON_CODE: <optional>\n"
+        + "  CITATIONS: chunk_id=1,knowledge_id=2,page_id=3,score=0.42 | chunk_id=...\n"
+        + "  -->\n"
+        + "- When status=ok, the answer must be present and CITATIONS must include at least 1 item.\n"
+        + "- When status=no_knowledge or need_clarification, keep the answer concise and set CITATIONS to empty.\n"
+        + "- Ground your answer strictly in the provided context.\n"
+        + "- Respond in the same language as the question (Korean/English/Chinese/Japanese).\n"
+        + "- Do not switch output language based on the context language; follow the user's question language only.\n"
+        + "- If force_clarify is True, set status=need_clarification and answer with a clarifying question.\n"
+        + "- Use only the URLs in the [SOURCES] section for download/external links.\n"
     )
 
     #  few-shot 로드(없으면 조용히 스킵)
@@ -300,11 +308,11 @@ def make_qa_chain(
     messages.append(
         (
             "human",
-            "다음 컨텍스트를 참고해.\n"
-            "[컨텍스트 시작]\n{context}\n[컨텍스트 끝]\n\n"
-            "질문: {question}\n"
+            "Refer to the following context.\n"
+            "[Context Start]\n{context}\n[Context End]\n\n"
+            "Question: {question}\n"
             "force_clarify: {force_clarify}\n\n"
-            "출력 규칙: 마크다운 OK / 코드블록( ``` ) 금지 / JSON-only 금지\n",
+            "Output rules: Markdown only / no code blocks / answer in the question language (Korean/English/Chinese/Japanese)\n",
         )
     )
 
@@ -328,10 +336,56 @@ def make_qa_chain(
         except Exception:
             pass
 
-    return (
+    answer_chain = (
         base
         | enrich
         | prompt
         | llm
         | StrOutputParser()
+    )
+
+    translator_prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a translation engine. Translate the text to {target_language}.\n"
+                "Preserve URLs, product names, and technical terms.\n"
+                "Keep Markdown formatting and list structure.\n"
+                "Do not add new information or omit content.\n"
+                "Never use code blocks.",
+            ),
+            ("human", "{text}"),
+        ]
+    )
+
+    translator_llm = get_llm(
+        provider=provider,
+        model=model,
+        temperature=0.0,
+        streaming=False,
+    )
+
+    if callbacks:
+        try:
+            translator_llm = translator_llm.with_config(callbacks=callbacks, run_name="translate_llm")
+        except Exception:
+            pass
+
+    translate_chain = translator_prompt | translator_llm | StrOutputParser()
+
+    def _translate_if_needed(payload: dict) -> str:
+        question = payload.get("question", "") or ""
+        answer = payload.get("answer", "") or ""
+        target_lang = detect_language(question)
+        if not answer:
+            return answer
+        if not needs_translation(answer, target_lang):
+            return answer
+        return translate_chain.invoke(
+            {"text": answer, "target_language": language_label(target_lang)}
+        )
+
+    return (
+        RunnableMap({"answer": answer_chain, "question": itemgetter("question")})
+        | RunnableLambda(_translate_if_needed)
     )

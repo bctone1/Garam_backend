@@ -48,7 +48,7 @@ class SystemSettingResponse(BaseModel):
 # ----- QuickCategory -----
 
 class QuickCategoryBase(BaseModel):
-    id: Optional[int] = None  # ✅ 기존 항목 업데이트용
+    id: Optional[int] = None
     icon_emoji: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None

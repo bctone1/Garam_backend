@@ -22,7 +22,7 @@ _IVFFLAT_PROBES = int(os.getenv("IVFFLAT_PROBES", "10"))
 
 
 # =========================================================
-# Internal helpers (search fallback)
+# Internal helpers
 # =========================================================
 def _maybe_set_ivfflat_probes(db: Session) -> None:
     """
@@ -37,6 +37,32 @@ def _maybe_set_ivfflat_probes(db: Session) -> None:
         return
 
 
+def _finalize(db: Session, *, commit: bool) -> None:
+    """
+    commit=True: commit
+    commit=False: flush (트랜잭션은 호출부가 commit/rollback)
+    """
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+
+
+def _refresh_if_possible(db: Session, obj: Any, *, commit: bool) -> None:
+    """
+    commit=False여도 flush 이후 refresh는 가능(같은 트랜잭션 내).
+    단, 대량 bulk에선 비용이 커서 필요한 곳만 씀.
+    """
+    try:
+        db.refresh(obj)
+    except Exception:
+        # refresh 실패해도 핵심 로직은 돌아가게
+        return
+
+
+# =========================================================
+# Internal helpers (search fallback)
+# =========================================================
 def _keyword_fallback_ilike(
     db: Session,
     *,
@@ -61,12 +87,16 @@ def _keyword_fallback_ilike(
     if knowledge_id is not None:
         stmt = stmt.where(KnowledgeChunk.knowledge_id == knowledge_id)
 
-    stmt = stmt.where(
-        or_(
-            KnowledgeChunk.chunk_text.ilike(like1),
-            func.replace(KnowledgeChunk.chunk_text, " ", "").ilike(like2),
+    stmt = (
+        stmt.where(
+            or_(
+                KnowledgeChunk.chunk_text.ilike(like1),
+                func.replace(KnowledgeChunk.chunk_text, " ", "").ilike(like2),
+            )
         )
-    ).order_by(KnowledgeChunk.created_at.desc()).limit(min(max(int(k), 1) * 5, 200))
+        .order_by(KnowledgeChunk.created_at.desc())
+        .limit(min(max(int(k), 1) * 5, 200))
+    )
 
     rows = db.execute(stmt).scalars().all()
     if exclude_ids:
@@ -103,7 +133,11 @@ def _fallback_chunks(
             .limit(max(1, int(k)))
         )
     else:
-        stmt = select(KnowledgeChunk).order_by(KnowledgeChunk.created_at.desc()).limit(max(1, int(k)))
+        stmt = (
+            select(KnowledgeChunk)
+            .order_by(KnowledgeChunk.created_at.desc())
+            .limit(max(1, int(k)))
+        )
 
     rows = db.execute(stmt).scalars().all()
     if exclude_ids:
@@ -136,32 +170,32 @@ def list_knowledge(
     return db.execute(stmt).scalars().all()
 
 
-def create_knowledge(db: Session, data: dict) -> Knowledge:
+def create_knowledge(db: Session, data: dict, commit: bool = True) -> Knowledge:
     obj = Knowledge(**data)
     db.add(obj)
-    db.commit()
-    db.refresh(obj)
+    _finalize(db, commit=commit)
+    _refresh_if_possible(db, obj, commit=commit)
     return obj
 
 
-def update_knowledge(db: Session, knowledge_id: int, data: Dict[str, Any]) -> Optional[Knowledge]:
+def update_knowledge(db: Session, knowledge_id: int, data: Dict[str, Any], commit: bool = True) -> Optional[Knowledge]:
     obj = get_knowledge(db, knowledge_id)
     if not obj:
         return None
     for k, v in data.items():
         setattr(obj, k, v)
     db.add(obj)
-    db.commit()
-    db.refresh(obj)
+    _finalize(db, commit=commit)
+    _refresh_if_possible(db, obj, commit=commit)
     return obj
 
 
-def delete_knowledge(db: Session, knowledge_id: int) -> bool:
+def delete_knowledge(db: Session, knowledge_id: int, commit: bool = True) -> bool:
     obj = get_knowledge(db, knowledge_id)
     if not obj:
         return False
     db.delete(obj)  # pages, chunks는 CASCADE/관계로 정리
-    db.commit()
+    _finalize(db, commit=commit)
     return True
 
 
@@ -197,22 +231,30 @@ def list_pages(
     return db.execute(stmt).scalars().all()
 
 
-def upsert_page(db: Session, *, knowledge_id: int, page_no: int, image_url: str) -> KnowledgePage:
+def upsert_page(
+    db: Session,
+    *,
+    knowledge_id: int,
+    page_no: int,
+    image_url: str,
+    commit: bool = True,
+) -> KnowledgePage:
     obj = get_page_by_doc_page(db, knowledge_id, page_no)
     if obj:
         obj.image_url = image_url
         db.add(obj)
-        db.commit()
-        db.refresh(obj)
+        _finalize(db, commit=commit)
+        _refresh_if_possible(db, obj, commit=commit)
         return obj
+
     obj = KnowledgePage(knowledge_id=knowledge_id, page_no=page_no, image_url=image_url)
     db.add(obj)
-    db.commit()
-    db.refresh(obj)
+    _finalize(db, commit=commit)
+    _refresh_if_possible(db, obj, commit=commit)
     return obj
 
 
-def bulk_create_pages(db: Session, knowledge_id: int, pages: list[dict]) -> int:
+def bulk_create_pages(db: Session, knowledge_id: int, pages: list[dict], commit: bool = True) -> int:
     objs = [
         KnowledgePage(
             knowledge_id=knowledge_id,
@@ -222,16 +264,16 @@ def bulk_create_pages(db: Session, knowledge_id: int, pages: list[dict]) -> int:
         for p in pages
     ]
     db.add_all(objs)
-    db.commit()
+    _finalize(db, commit=commit)
     return len(objs)
 
 
-def delete_page(db: Session, page_id: int) -> bool:
+def delete_page(db: Session, page_id: int, commit: bool = True) -> bool:
     obj = get_page(db, page_id)
     if not obj:
         return False
     db.delete(obj)
-    db.commit()
+    _finalize(db, commit=commit)
     return True
 
 
@@ -275,6 +317,7 @@ def create_chunk(
     chunk_index: int,
     chunk_text: str,
     vector_memory: VectorArray,
+    commit: bool = True,
 ) -> KnowledgeChunk:
     obj = KnowledgeChunk(
         knowledge_id=knowledge_id,
@@ -284,8 +327,8 @@ def create_chunk(
         vector_memory=list(vector_memory),
     )
     db.add(obj)
-    db.commit()
-    db.refresh(obj)
+    _finalize(db, commit=commit)
+    _refresh_if_possible(db, obj, commit=commit)
     return obj
 
 
@@ -297,6 +340,7 @@ def upsert_chunk(
     chunk_index: int,
     chunk_text: str,
     vector_memory: VectorArray,
+    commit: bool = True,
 ) -> KnowledgeChunk:
     obj = get_chunk_by_doc_index(db, knowledge_id, int(chunk_index))
     if obj:
@@ -304,9 +348,10 @@ def upsert_chunk(
         obj.chunk_text = str(chunk_text)
         obj.vector_memory = list(vector_memory)
         db.add(obj)
-        db.commit()
-        db.refresh(obj)
+        _finalize(db, commit=commit)
+        _refresh_if_possible(db, obj, commit=commit)
         return obj
+
     return create_chunk(
         db,
         knowledge_id=knowledge_id,
@@ -314,11 +359,23 @@ def upsert_chunk(
         chunk_index=int(chunk_index),
         chunk_text=str(chunk_text),
         vector_memory=list(vector_memory),
+        commit=commit,
     )
 
 
-def bulk_upsert_chunks(db: Session, knowledge_id: int, items: List[Dict[str, Any]]) -> List[KnowledgeChunk]:
+def bulk_upsert_chunks(
+    db: Session,
+    knowledge_id: int,
+    items: List[Dict[str, Any]],
+    commit: bool = True,
+    refresh: bool = False,
+) -> List[KnowledgeChunk]:
+    """
+    refresh=False(기본): bulk 성능 우선
+    refresh=True: 반환 객체들 refresh 수행(느림)
+    """
     out: List[KnowledgeChunk] = []
+
     existing = db.execute(
         select(KnowledgeChunk.chunk_index, KnowledgeChunk.id).where(KnowledgeChunk.knowledge_id == knowledge_id)
     ).all()
@@ -328,6 +385,19 @@ def bulk_upsert_chunks(db: Session, knowledge_id: int, items: List[Dict[str, Any
         idx = int(it["chunk_index"])
         if idx in idx_to_id:
             obj = db.get(KnowledgeChunk, idx_to_id[idx])
+            if not obj:
+                # 방어: idx_to_id에 있는데 row가 없으면 새로 생성
+                obj = KnowledgeChunk(
+                    knowledge_id=knowledge_id,
+                    page_id=it.get("page_id"),
+                    chunk_index=idx,
+                    chunk_text=str(it["chunk_text"]),
+                    vector_memory=list(it["vector_memory"]),
+                )
+                db.add(obj)
+                out.append(obj)
+                continue
+
             obj.page_id = it.get("page_id")
             obj.chunk_text = str(it["chunk_text"])
             obj.vector_memory = list(it["vector_memory"])
@@ -344,9 +414,12 @@ def bulk_upsert_chunks(db: Session, knowledge_id: int, items: List[Dict[str, Any
             db.add(obj)
             out.append(obj)
 
-    db.commit()
-    for o in out:
-        db.refresh(o)
+    _finalize(db, commit=commit)
+
+    if refresh:
+        for o in out:
+            _refresh_if_possible(db, o, commit=commit)
+
     return out
 
 
@@ -355,6 +428,7 @@ def create_knowledge_chunks(
     knowledge_id: int,
     chunks: list[str],
     vectors: list[list[float]],
+    commit: bool = True,
 ) -> List[KnowledgeChunk]:
     """
     upload_pipeline용 배치 저장 (chunk_index는 1부터)
@@ -374,7 +448,7 @@ def create_knowledge_chunks(
         )
     if not items:
         return []
-    return bulk_upsert_chunks(db, knowledge_id, items)
+    return bulk_upsert_chunks(db, knowledge_id, items, commit=commit, refresh=False)
 
 
 # upload_pipeline이 기존 이름(create_chunks)으로 호출해도 안 깨지게 alias 제공
@@ -383,24 +457,25 @@ def create_chunks(
     knowledge_id: int,
     chunks: list[str],
     vectors: list[list[float]],
+    commit: bool = True,
 ) -> List[KnowledgeChunk]:
-    return create_knowledge_chunks(db, knowledge_id, chunks, vectors)
+    return create_knowledge_chunks(db, knowledge_id, chunks, vectors, commit=commit)
 
 
-def delete_chunk(db: Session, chunk_id: int) -> bool:
+def delete_chunk(db: Session, chunk_id: int, commit: bool = True) -> bool:
     obj = get_chunk(db, chunk_id)
     if not obj:
         return False
     db.delete(obj)
-    db.commit()
+    _finalize(db, commit=commit)
     return True
 
 
-def delete_chunks_by_knowledge(db: Session, knowledge_id: int) -> int:
+def delete_chunks_by_knowledge(db: Session, knowledge_id: int, commit: bool = True) -> int:
     rows = list_chunks(db, knowledge_id=knowledge_id, limit=10_000)
     for r in rows:
         db.delete(r)
-    db.commit()
+    _finalize(db, commit=commit)
     return len(rows)
 
 
@@ -553,7 +628,7 @@ from typing import Optional as _Optional
 from typing import List as _List, Dict as _Dict, Any as _Any
 
 
-def bulk_create_pages_any(db: Session, items: _List[_Dict[str, _Any]]) -> _List[KnowledgePage]:
+def bulk_create_pages_any(db: Session, items: _List[_Dict[str, _Any]], commit: bool = True) -> _List[KnowledgePage]:
     objs: _List[KnowledgePage] = []
     for p in items:
         obj = KnowledgePage(
@@ -563,9 +638,8 @@ def bulk_create_pages_any(db: Session, items: _List[_Dict[str, _Any]]) -> _List[
         )
         db.add(obj)
         objs.append(obj)
-    db.commit()
-    for o in objs:
-        db.refresh(o)
+    _finalize(db, commit=commit)
+    # bulk는 기본 refresh 안 함(필요하면 호출부에서 개별 refresh)
     return objs
 
 
@@ -578,6 +652,7 @@ def create_chunk_with_default_vector(
     chunk_text: str,
     vector_memory: _Optional[VectorArray],
     vector_dim: int = 1536,
+    commit: bool = True,
 ) -> KnowledgeChunk:
     vec = list(vector_memory) if vector_memory is not None else [0.0] * int(vector_dim)
     return create_chunk(
@@ -587,6 +662,7 @@ def create_chunk_with_default_vector(
         chunk_index=chunk_index,
         chunk_text=chunk_text,
         vector_memory=vec,
+        commit=commit,
     )
 
 
@@ -599,6 +675,7 @@ def upsert_chunk_with_default_vector(
     chunk_text: str,
     vector_memory: _Optional[VectorArray],
     vector_dim: int = 1536,
+    commit: bool = True,
 ) -> KnowledgeChunk:
     vec = list(vector_memory) if vector_memory is not None else [0.0] * int(vector_dim)
     return upsert_chunk(
@@ -608,6 +685,7 @@ def upsert_chunk_with_default_vector(
         chunk_index=chunk_index,
         chunk_text=chunk_text,
         vector_memory=vec,
+        commit=commit,
     )
 
 
@@ -616,6 +694,7 @@ def bulk_upsert_chunks_with_default(
     knowledge_id: int,
     raw_items: _List[_Dict[str, _Any]],
     vector_dim: int = 1536,
+    commit: bool = True,
 ) -> _List[KnowledgeChunk]:
     items: _List[_Dict[str, _Any]] = []
     for it in raw_items:
@@ -630,4 +709,85 @@ def bulk_upsert_chunks_with_default(
                 "vector_memory": list(vec),
             }
         )
-    return bulk_upsert_chunks(db, knowledge_id, items)
+    return bulk_upsert_chunks(db, knowledge_id, items, commit=commit, refresh=False)
+
+
+# =========================================================
+# nocommit aliases (편하게 쓰기)
+# =========================================================
+def create_knowledge_nocommit(db: Session, data: dict) -> Knowledge:
+    return create_knowledge(db, data, commit=False)
+
+
+def update_knowledge_nocommit(db: Session, knowledge_id: int, data: Dict[str, Any]) -> Optional[Knowledge]:
+    return update_knowledge(db, knowledge_id, data, commit=False)
+
+
+def delete_knowledge_nocommit(db: Session, knowledge_id: int) -> bool:
+    return delete_knowledge(db, knowledge_id, commit=False)
+
+
+def upsert_page_nocommit(db: Session, *, knowledge_id: int, page_no: int, image_url: str) -> KnowledgePage:
+    return upsert_page(db, knowledge_id=knowledge_id, page_no=page_no, image_url=image_url, commit=False)
+
+
+def create_chunk_nocommit(
+    db: Session,
+    *,
+    knowledge_id: int,
+    page_id: Optional[int],
+    chunk_index: int,
+    chunk_text: str,
+    vector_memory: VectorArray,
+) -> KnowledgeChunk:
+    return create_chunk(
+        db,
+        knowledge_id=knowledge_id,
+        page_id=page_id,
+        chunk_index=chunk_index,
+        chunk_text=chunk_text,
+        vector_memory=vector_memory,
+        commit=False,
+    )
+
+
+def upsert_chunk_nocommit(
+    db: Session,
+    *,
+    knowledge_id: int,
+    page_id: Optional[int],
+    chunk_index: int,
+    chunk_text: str,
+    vector_memory: VectorArray,
+) -> KnowledgeChunk:
+    return upsert_chunk(
+        db,
+        knowledge_id=knowledge_id,
+        page_id=page_id,
+        chunk_index=chunk_index,
+        chunk_text=chunk_text,
+        vector_memory=vector_memory,
+        commit=False,
+    )
+
+
+def upsert_chunk_with_default_vector_nocommit(
+    db: Session,
+    *,
+    knowledge_id: int,
+    page_id: Optional[int],
+    chunk_index: int,
+    chunk_text: str,
+    vector_memory: Optional[VectorArray],
+    vector_dim: int = 1536,
+) -> KnowledgeChunk:
+    return upsert_chunk_with_default_vector(
+        db,
+        knowledge_id=knowledge_id,
+        page_id=page_id,
+        chunk_index=chunk_index,
+        chunk_text=chunk_text,
+        vector_memory=vector_memory,
+        vector_dim=vector_dim,
+        commit=False,
+    )

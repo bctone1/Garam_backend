@@ -1,4 +1,3 @@
-
 import os, logging, uvicorn
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -9,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.routers import register_routers
 from core.config import UPLOAD_FOLDER
 from core.scheduler import init_scheduler  # APScheduler 초기화
+from core.firebase import init_firebase
 
 load_dotenv()
 log = logging.getLogger("uvicorn")
@@ -16,6 +16,7 @@ log = logging.getLogger("uvicorn")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
+    init_firebase()  # 실패해도 서버는 기동 (푸시만 비활성)
     sched = init_scheduler()
     sched.start()
     app.state.scheduler = sched

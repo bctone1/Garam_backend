@@ -1,12 +1,16 @@
 # garam_backend/models/__init__.py
 
 from models import admin_user
+from models import customer
 from models import inquiry
 from models import chat
 from models import knowledge
 from models import faq
 from models import system
 from models import model
+from models import chat_history
+from models import notice
+from models import device_token
 from .daily_dashboard import DailyDashboard
 
 from models.api_cost import ApiCostDaily
@@ -21,4 +25,8 @@ __all__ = [
     "faq",
     "system",
     "model",
+    "chat_history",
+    "customer",
+    "notice",
+    "device_token",
 ]
