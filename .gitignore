@@ -10,3 +10,4 @@ pycache/
 .claude
 .omc
 .playwright-mcp
+/config
