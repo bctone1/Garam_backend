@@ -253,6 +253,7 @@ class Notification(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     read_at = Column(DateTime(timezone=True), nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
 
     recipient = relationship("AdminUser", foreign_keys=[recipient_admin_id])
     actor = relationship("AdminUser", foreign_keys=[actor_admin_id])

@@ -6,7 +6,7 @@ import re
 import shutil
 from uuid import uuid4
 from typing import Optional, List, Dict, Any, Literal
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 _KST = ZoneInfo("Asia/Seoul")
@@ -18,6 +18,7 @@ import core.config as config
 from models.inquiry import Inquiry, InquiryHistory, InquiryAttachment, Notification
 from models.admin_user import AdminUser  # 이름 해석용
 from crud.customer import get_by_business_number, clean_business_number
+from crud import notification as notif_crud
 from service.ws_manager import ws_manager
 
 try:
@@ -442,6 +443,11 @@ def create(db: Session, data: dict) -> Inquiry:
         inquiry_id=obj.id,
         actor_admin_id=None,
     )
+    # completed 상태로 직접 생성 시 알림을 처음부터 archive
+    if obj.status == "completed":
+        from datetime import timezone as _tz
+        notif.archived_at = datetime.now(_tz.utc)
+
     db.flush()  # notif.id 확보
 
     if attachments:
@@ -450,18 +456,19 @@ def create(db: Session, data: dict) -> Inquiry:
     db.commit()
     db.refresh(obj)
 
-    # WS publish (after commit)
-    _publish_notification_created_sync(
-        db,
-        recipient_admin_id=REP_ADMIN_ID,
-        notification_id=notif.id,
-        inquiry_id=obj.id,
-        event_type="inquiry_new",
-        actor_admin_id=None,
-        actor_name=None,
-        business_name=obj.business_name,
-        created_at=getattr(notif, "created_at", None),
-    )
+    # WS publish (after commit) — completed 상태면 이미 archived이므로 생략
+    if obj.status != "completed":
+        _publish_notification_created_sync(
+            db,
+            recipient_admin_id=REP_ADMIN_ID,
+            notification_id=notif.id,
+            inquiry_id=obj.id,
+            event_type="inquiry_new",
+            actor_admin_id=None,
+            actor_name=None,
+            business_name=obj.business_name,
+            created_at=getattr(notif, "created_at", None),
+        )
 
     return obj
 
@@ -498,6 +505,8 @@ def update(db: Session, inquiry_id: int, data: Dict[str, Any]) -> Optional[Inqui
         data.setdefault("assigned_at", None)
         data.setdefault("assigned_by_admin_id", None)
 
+    completing = data.get("status") == "completed" and obj.status != "completed"
+
     if data.get("status") == "completed":
         if obj.completed_at is None and not data.get("completed_at"):
             data["completed_at"] = _kst_now()
@@ -508,8 +517,16 @@ def update(db: Session, inquiry_id: int, data: Dict[str, Any]) -> Optional[Inqui
         setattr(obj, k, v)
 
     db.add(obj)
+
+    if completing:
+        archive_payloads = notif_crud.archive_by_inquiry(db, inquiry_id=inquiry_id)
+
     db.commit()
     db.refresh(obj)
+
+    if completing:
+        notif_crud.publish_archive_payloads(db, archive_payloads, inquiry_id)
+
     return obj
 
 
@@ -675,23 +692,18 @@ def set_status(
             inquiry_id=inquiry_id,
             actor_admin_id=actor_id,
         )
+        # 완료 알림은 패널에서 숨김 (생성과 동시에 archive)
+        notif.archived_at = datetime.now(timezone.utc)
         db.flush()
+
+        # inquiry_new / inquiry_assigned 알림 archive
+        archive_payloads = notif_crud.archive_by_inquiry(db, inquiry_id=inquiry_id)
 
         db.add(obj)
         db.commit()
         db.refresh(obj)
 
-        _publish_notification_created_sync(
-            db,
-            recipient_admin_id=REP_ADMIN_ID,
-            notification_id=notif.id,
-            inquiry_id=inquiry_id,
-            event_type="inquiry_completed",
-            actor_admin_id=actor_id,
-            actor_name=actor_name,
-            business_name=obj.business_name,
-            created_at=getattr(notif, "created_at", None),
-        )
+        notif_crud.publish_archive_payloads(db, archive_payloads, inquiry_id)
         return obj
 
     elif status == "on_hold":

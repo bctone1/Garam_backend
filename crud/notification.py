@@ -41,6 +41,7 @@ def _unread_count(db: Session, recipient_admin_id: int, event_type: Optional[Eve
             and_(
                 Notification.recipient_admin_id == recipient_admin_id,
                 Notification.read_at.is_(None),
+                Notification.archived_at.is_(None),
             )
         )
     )
@@ -71,6 +72,7 @@ def serialize_notification(n: Notification) -> Dict[str, Any]:
 
         "created_at": n.created_at,
         "read_at": n.read_at,
+        "archived_at": n.archived_at,
 
         "actor_name": actor_name,
 
@@ -97,6 +99,7 @@ def list_notifications(
     *,
     recipient_admin_id: int,
     unread_only: bool = False,
+    include_archived: bool = False,
     offset: int = 0,
     limit: int = 50,
     event_type: Optional[EventType] = None,
@@ -111,6 +114,8 @@ def list_notifications(
     )
     if unread_only:
         stmt = stmt.where(Notification.read_at.is_(None))
+    if not include_archived:
+        stmt = stmt.where(Notification.archived_at.is_(None))
     if event_type:
         stmt = stmt.where(Notification.event_type == event_type)
 
@@ -123,7 +128,22 @@ def unread_count(
     *,
     recipient_admin_id: int,
     event_type: Optional[EventType] = None,
+    include_archived: bool = False,
 ) -> int:
+    if include_archived:
+        stmt = (
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                and_(
+                    Notification.recipient_admin_id == recipient_admin_id,
+                    Notification.read_at.is_(None),
+                )
+            )
+        )
+        if event_type:
+            stmt = stmt.where(Notification.event_type == event_type)
+        return int(db.execute(stmt).scalar_one() or 0)
     return _unread_count(db, recipient_admin_id, event_type=event_type)
 
 
@@ -217,3 +237,112 @@ def mark_all_read(
     )
 
     return int(res.rowcount or 0)
+
+
+def archive_by_inquiry(
+    db: Session,
+    *,
+    inquiry_id: int,
+    archived_at: Optional[datetime] = None,
+) -> list[dict]:
+    """
+    inquiry_new / inquiry_assigned 알림을 archive.
+    commit하지 않음 — 호출자가 commit 후 publish_archive_payloads 호출.
+    Returns: [{"recipient_admin_id": ..., "notification_ids": [...]}, ...]
+    """
+    if archived_at is None:
+        archived_at = datetime.now(timezone.utc)
+
+    rows = db.execute(
+        select(Notification.id, Notification.recipient_admin_id)
+        .where(
+            and_(
+                Notification.inquiry_id == inquiry_id,
+                Notification.event_type.in_(["inquiry_new", "inquiry_assigned"]),
+                Notification.archived_at.is_(None),
+            )
+        )
+    ).all()
+
+    if not rows:
+        return []
+
+    ids = [r.id for r in rows]
+    db.execute(
+        update(Notification)
+        .where(Notification.id.in_(ids))
+        .values(archived_at=archived_at)
+    )
+
+    recipient_map: dict[int, list[int]] = {}
+    for r in rows:
+        recipient_map.setdefault(r.recipient_admin_id, []).append(r.id)
+
+    return [
+        {"recipient_admin_id": rid, "notification_ids": nids}
+        for rid, nids in recipient_map.items()
+    ]
+
+
+def publish_archive_payloads(
+    db: Session,
+    payloads: list[dict],
+    inquiry_id: int,
+) -> None:
+    """commit 이후 호출. recipient별 notifications_archived WS 이벤트 전송."""
+    for p in payloads:
+        rid = p["recipient_admin_id"]
+        ws_manager.publish_sync(rid, {
+            "type": "notifications_archived",
+            "inquiry_id": inquiry_id,
+            "notification_ids": p["notification_ids"],
+            "unread_count": _unread_count(db, rid),
+        })
+
+
+def archive_one(
+    db: Session,
+    *,
+    notification_id: int,
+    recipient_admin_id: int,
+    archived_at: Optional[datetime] = None,
+) -> bool:
+    """단건 archive. 이미 archived면 True 반환(idempotent). 존재하지 않으면 False."""
+    if archived_at is None:
+        archived_at = datetime.now(timezone.utc)
+
+    res = db.execute(
+        update(Notification)
+        .where(
+            and_(
+                Notification.id == notification_id,
+                Notification.recipient_admin_id == recipient_admin_id,
+                Notification.archived_at.is_(None),
+            )
+        )
+        .values(archived_at=archived_at)
+    )
+
+    if not res.rowcount:
+        exists = db.execute(
+            select(Notification.id).where(
+                and_(
+                    Notification.id == notification_id,
+                    Notification.recipient_admin_id == recipient_admin_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if exists is None:
+            db.rollback()
+            return False
+        # 이미 archived — idempotent, commit/WS 생략
+        return True
+
+    db.commit()
+    ws_manager.publish_sync(recipient_admin_id, {
+        "type": "notifications_archived",
+        "inquiry_id": None,
+        "notification_ids": [notification_id],
+        "unread_count": _unread_count(db, recipient_admin_id),
+    })
+    return True

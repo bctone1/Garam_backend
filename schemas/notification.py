@@ -29,6 +29,7 @@ class NotificationResponse(BaseModel):
 
     created_at: datetime
     read_at: Optional[datetime] = None
+    archived_at: Optional[datetime] = None
 
     actor_name: Optional[str] = None
     inquiry: Optional[NotificationInquiryMini] = None
@@ -53,4 +54,14 @@ class NotificationMarkReadResponse(BaseModel):
     ok: bool
     notification_id: int
     read_at: Optional[datetime] = None
+    unread_count: int
+
+
+class NotificationArchiveIn(BaseModel):
+    recipient_admin_id: int
+
+
+class NotificationArchiveResponse(BaseModel):
+    ok: bool
+    notification_id: int
     unread_count: int

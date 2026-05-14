@@ -14,6 +14,8 @@ from schemas.notification import (
     NotificationUnreadCountResponse,
     NotificationMarkReadIn,
     NotificationMarkReadResponse,
+    NotificationArchiveIn,
+    NotificationArchiveResponse,
     NotificationEventType,
 )
 
@@ -25,6 +27,7 @@ router = APIRouter(prefix="/notifications", tags=["웹소켓 알림"])
 def list_notifications(
     recipient_admin_id: int = Query(..., description="수신 관리자 id"),
     unread_only: bool = Query(False),
+    include_archived: bool = Query(False),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     event_type: Optional[NotificationEventType] = Query(None),
@@ -34,6 +37,7 @@ def list_notifications(
         db,
         recipient_admin_id=recipient_admin_id,
         unread_only=unread_only,
+        include_archived=include_archived,
         offset=offset,
         limit=limit,
         event_type=event_type,
@@ -73,5 +77,27 @@ def mark_read(
         ok=True,
         notification_id=notification_id,
         read_at=None,  # 필요하면 notif_crud가 read_at을 리턴하도록 확장 가능
+        unread_count=cnt,
+    )
+
+
+# 4) 알림 archive (패널에서 숨기기)
+@router.patch("/{notification_id}/archive", response_model=NotificationArchiveResponse)
+def archive_notification(
+    notification_id: int,
+    payload: NotificationArchiveIn,
+    db: Session = Depends(get_db),
+):
+    ok = notif_crud.archive_one(
+        db,
+        notification_id=notification_id,
+        recipient_admin_id=payload.recipient_admin_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="notification not found")
+    cnt = notif_crud.unread_count(db, recipient_admin_id=payload.recipient_admin_id)
+    return NotificationArchiveResponse(
+        ok=True,
+        notification_id=notification_id,
         unread_count=cnt,
     )
