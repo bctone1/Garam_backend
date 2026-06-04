@@ -63,7 +63,9 @@ def create_inquiry(
     business_name: Optional[str] = Form(None),
     content: str = Form(...),
     business_number: Optional[str] = Form(None),
+    owner_name: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
+    store_phone: Optional[str] = Form(None),
     inquiry_type: Optional[str] = Form(None),
     files: Optional[List[UploadFile]] = File(None, description="최대 이미지 3장"),
 
@@ -72,7 +74,9 @@ def create_inquiry(
     # 빈 문자열 → None 정규화 (multipart form에서 빈 값이 "" 로 전송됨)
     business_name = business_name.strip() or None if business_name else None
     business_number = business_number.strip() or None if business_number else None
+    owner_name = owner_name.strip() or None if owner_name else None
     phone = phone.strip() or None if phone else None
+    store_phone = store_phone.strip() or None if store_phone else None
 
     files = files or []
     if len(files) > MAX_ATTACHMENTS:
@@ -85,7 +89,9 @@ def create_inquiry(
             {
                 "business_name": business_name,
                 "business_number": business_number,
+                "owner_name": owner_name,
                 "phone": phone,
+                "store_phone": store_phone,
                 "content": content,
                 "inquiry_type": inquiry_type,
             },

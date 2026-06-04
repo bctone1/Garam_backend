@@ -397,8 +397,12 @@ def create(db: Session, data: dict) -> Inquiry:
                 data["customer_id"] = customer.id
                 if customer.business_name:
                     data["business_name"] = customer.business_name
+                if customer.owner_name:
+                    data["owner_name"] = customer.owner_name
                 if customer.phone:
                     data["phone"] = customer.phone
+                if customer.store_phone:
+                    data["store_phone"] = customer.store_phone
 
     # business_name 최종 검증
     if not data.get("business_name"):

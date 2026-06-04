@@ -45,8 +45,9 @@ class InquiryAttachmentResponse(InquiryAttachmentBase):
 class InquiryBase(BaseModel):
     business_name: Optional[str] = None
     business_number: Optional[str] = None
-
+    owner_name: Optional[str] = None
     phone: Optional[str] = None
+    store_phone: Optional[str] = None
     content: str
     inquiry_type: InquiryType = "other"
     status: Status = "new"
@@ -67,8 +68,9 @@ class InquiryCreate(InquiryBase):
 class InquiryUpdate(BaseModel):
     business_name: Optional[str] = None
     business_number: Optional[str] = None
-
+    owner_name: Optional[str] = None
     phone: Optional[str] = None
+    store_phone: Optional[str] = None
     content: Optional[str] = None
     inquiry_type: Optional[InquiryType] = None
     status: Optional[Status] = None

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database.session import get_db
 from crud import customer as crud
-from schemas.customer import CustomerResponse, CustomerCreate, CustomerUpdate, CsvUploadResponse
+from schemas.customer import CustomerResponse, CustomerCreate, CustomerUpdate, CsvUploadResponse, CustomerListResponse
 
 router = APIRouter(prefix="/customer", tags=["Customer"])
 
@@ -17,7 +17,9 @@ router = APIRouter(prefix="/customer", tags=["Customer"])
 _CSV_COL_MAP = {
     "사업자번호": "business_number",
     "상호명": "business_name",
+    "대표자명": "owner_name",
     "전화번호": "phone",
+    "매장연락처": "store_phone",
     "주소": "address",
 }
 
@@ -52,23 +54,27 @@ def upload_csv(
     return {"total": len(rows), "created": len(created)}
 
 
-@router.get("/", response_model=list[CustomerResponse])
+@router.get("/", response_model=CustomerListResponse)
 def list_customers(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    return crud.list_customers(db, offset=offset, limit=limit)
+    total = crud.count_customers(db)
+    items = crud.list_customers(db, offset=offset, limit=limit)
+    return {"total": total, "items": items}
 
 
-@router.get("/search", response_model=list[CustomerResponse])
+@router.get("/search", response_model=CustomerListResponse)
 def search_customers(
     q: str = Query(..., min_length=1, description="사업자명 또는 사업자번호 검색어"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    return crud.search_by_keyword(db, q, offset=offset, limit=limit)
+    total = crud.count_by_keyword(db, q)
+    items = crud.search_by_keyword(db, q, offset=offset, limit=limit)
+    return {"total": total, "items": items}
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)

@@ -28,7 +28,9 @@ class Inquiry(Base):
         nullable=True,
     )
 
+    owner_name = Column(String, nullable=True)
     phone = Column(String)
+    store_phone = Column(String, nullable=True)
     content = Column(Text, nullable=False)
 
     inquiry_type = Column(String, nullable=False, server_default="other")

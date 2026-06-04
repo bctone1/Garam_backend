@@ -32,7 +32,9 @@ def create(db: Session, data: Dict[str, Any]) -> Customer:
     obj = Customer(
         business_number=clean_business_number(data.get("business_number")),
         business_name=data["business_name"],
+        owner_name=data.get("owner_name"),
         phone=data.get("phone"),
+        store_phone=data.get("store_phone"),
         address=data.get("address"),
     )
     db.add(obj)
@@ -50,7 +52,9 @@ def bulk_create_from_csv(db: Session, rows: List[Dict[str, Any]]) -> List[Custom
         obj = Customer(
             business_number=clean_business_number(row.get("business_number")),
             business_name=row["business_name"],
+            owner_name=row.get("owner_name"),
             phone=row.get("phone"),
+            store_phone=row.get("store_phone"),
             address=row.get("address"),
         )
         db.add(obj)
@@ -58,6 +62,18 @@ def bulk_create_from_csv(db: Session, rows: List[Dict[str, Any]]) -> List[Custom
 
     db.commit()
     return created
+
+
+def count_by_keyword(db: Session, keyword: str) -> int:
+    from sqlalchemy import func
+    pattern = f"%{keyword}%"
+    stmt = select(func.count()).select_from(Customer).where(
+        or_(
+            Customer.business_name.ilike(pattern),
+            Customer.business_number.ilike(pattern),
+        )
+    )
+    return db.execute(stmt).scalar()
 
 
 def search_by_keyword(
@@ -78,6 +94,11 @@ def search_by_keyword(
         .limit(min(limit, 100))
     )
     return db.execute(stmt).scalars().all()
+
+
+def count_customers(db: Session) -> int:
+    from sqlalchemy import func
+    return db.execute(select(func.count()).select_from(Customer)).scalar()
 
 
 def list_customers(
