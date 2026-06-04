@@ -67,7 +67,7 @@ def create_inquiry(
     phone: Optional[str] = Form(None),
     store_phone: Optional[str] = Form(None),
     inquiry_type: Optional[str] = Form(None),
-    files: Optional[List[UploadFile]] = File(None, description="최대 이미지 3장"),
+    files: List[UploadFile] = File(default=[], description="최대 이미지 3장"),
 
     db: Session = Depends(get_db),
 ):
@@ -78,7 +78,7 @@ def create_inquiry(
     phone = phone.strip() or None if phone else None
     store_phone = store_phone.strip() or None if store_phone else None
 
-    files = files or []
+
     if len(files) > MAX_ATTACHMENTS:
         raise HTTPException(status_code=400, detail=f"attachments max {MAX_ATTACHMENTS}")
 
