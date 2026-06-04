@@ -64,31 +64,31 @@ def bulk_create_from_csv(db: Session, rows: List[Dict[str, Any]]) -> List[Custom
     return created
 
 
+def _search_filter(pattern: str):
+    return or_(
+        Customer.business_name.ilike(pattern),
+        Customer.business_number.ilike(pattern),
+        Customer.owner_name.ilike(pattern),
+        Customer.phone.ilike(pattern),
+        Customer.store_phone.ilike(pattern),
+        Customer.address.ilike(pattern),
+    )
+
+
 def count_by_keyword(db: Session, keyword: str) -> int:
     from sqlalchemy import func
     pattern = f"%{keyword}%"
-    stmt = select(func.count()).select_from(Customer).where(
-        or_(
-            Customer.business_name.ilike(pattern),
-            Customer.business_number.ilike(pattern),
-        )
-    )
+    stmt = select(func.count()).select_from(Customer).where(_search_filter(pattern))
     return db.execute(stmt).scalar()
 
 
 def search_by_keyword(
     db: Session, keyword: str, *, offset: int = 0, limit: int = 50
 ) -> List[Customer]:
-    """사업자명 또는 사업자번호 ILIKE 부분 매칭 검색."""
     pattern = f"%{keyword}%"
     stmt = (
         select(Customer)
-        .where(
-            or_(
-                Customer.business_name.ilike(pattern),
-                Customer.business_number.ilike(pattern),
-            )
-        )
+        .where(_search_filter(pattern))
         .order_by(Customer.id.desc())
         .offset(offset)
         .limit(min(limit, 100))
