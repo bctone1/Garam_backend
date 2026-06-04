@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
 
 from models.customer import Customer
@@ -76,7 +76,6 @@ def _search_filter(pattern: str):
 
 
 def count_by_keyword(db: Session, keyword: str) -> int:
-    from sqlalchemy import func
     pattern = f"%{keyword}%"
     stmt = select(func.count()).select_from(Customer).where(_search_filter(pattern))
     return db.execute(stmt).scalar()
@@ -97,8 +96,7 @@ def search_by_keyword(
 
 
 def count_customers(db: Session) -> int:
-    from sqlalchemy import func
-    return db.execute(select(func.count()).select_from(Customer)).scalar()
+    return db.execute(select(func.count()).select_from(Customer)).scalar() or 0
 
 
 def list_customers(

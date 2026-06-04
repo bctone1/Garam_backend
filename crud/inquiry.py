@@ -395,13 +395,13 @@ def create(db: Session, data: dict) -> Inquiry:
             customer = get_by_business_number(db, cleaned_bn)
             if customer:
                 data["customer_id"] = customer.id
-                if customer.business_name:
+                if customer.business_name and not data.get("business_name"):
                     data["business_name"] = customer.business_name
-                if customer.owner_name:
+                if customer.owner_name and not data.get("owner_name"):
                     data["owner_name"] = customer.owner_name
-                if customer.phone:
+                if customer.phone and not data.get("phone"):
                     data["phone"] = customer.phone
-                if customer.store_phone:
+                if customer.store_phone and not data.get("store_phone"):
                     data["store_phone"] = customer.store_phone
 
     # business_name 최종 검증
