@@ -78,7 +78,7 @@ def create_inquiry(
     phone = phone.strip() or None if phone else None
     store_phone = store_phone.strip() or None if store_phone else None
 
-
+    files = [f for f in files if f.filename]
     if len(files) > MAX_ATTACHMENTS:
         raise HTTPException(status_code=400, detail=f"attachments max {MAX_ATTACHMENTS}")
 
