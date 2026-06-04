@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, status
 from sqlalchemy.orm import Session
