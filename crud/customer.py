@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import or_, select, func
+from sqlalchemy import or_, select, func, delete as sa_delete
 from sqlalchemy.orm import Session
 
 from models.customer import Customer
@@ -43,25 +43,52 @@ def create(db: Session, data: Dict[str, Any]) -> Customer:
     return obj
 
 
-def bulk_create_from_csv(db: Session, rows: List[Dict[str, Any]]) -> List[Customer]:
+def bulk_upsert_from_csv(db: Session, rows: List[Dict[str, Any]]) -> Dict[str, int]:
     """
-    CSV 일괄 등록. 한 트랜잭션으로 처리 (실패 시 전체 rollback).
+    CSV 일괄 등록/갱신. 사업자번호(숫자만) 기준 upsert.
+    - 기존 사업자번호가 있으면 덮어쓰기(update), 없으면 신규 생성(create).
+    - 사업자번호가 비어 있는 행은 건너뜀(skip).
+    - 같은 CSV 안에 동일 사업자번호가 여러 번 나오면 마지막 행이 최종값.
+    - 한 트랜잭션으로 처리 (실패 시 전체 rollback).
     """
-    created: List[Customer] = []
+    created = 0
+    updated = 0
+    skipped = 0
+    seen: Dict[str, Customer] = {}  # 같은 파일 내 중복 사업자번호 추적
+
     for row in rows:
-        obj = Customer(
-            business_number=clean_business_number(row.get("business_number")),
-            business_name=row["business_name"],
-            owner_name=row.get("owner_name"),
-            phone=row.get("phone"),
-            store_phone=row.get("store_phone"),
-            address=row.get("address"),
-        )
-        db.add(obj)
-        created.append(obj)
+        biz = clean_business_number(row.get("business_number"))
+        if not biz:
+            skipped += 1
+            continue
+
+        fields = {
+            "business_name": row["business_name"],
+            "owner_name": row.get("owner_name"),
+            "phone": row.get("phone"),
+            "store_phone": row.get("store_phone"),
+            "address": row.get("address"),
+        }
+
+        obj = seen.get(biz)
+        if obj is None:
+            obj = get_by_business_number(db, biz)
+
+        if obj is None:
+            obj = Customer(business_number=biz, **fields)
+            db.add(obj)
+            created += 1
+        else:
+            for k, v in fields.items():
+                setattr(obj, k, v)
+            db.add(obj)
+            if biz not in seen:  # DB 기존 건만 갱신으로 집계 (같은 파일 재등장 제외)
+                updated += 1
+
+        seen[biz] = obj
 
     db.commit()
-    return created
+    return {"created": created, "updated": updated, "skipped": skipped}
 
 
 def _search_filter(pattern: str):
@@ -122,6 +149,16 @@ def delete(db: Session, customer_id: int) -> bool:
     db.delete(obj)
     db.commit()
     return True
+
+
+def delete_many(db: Session, ids: List[int]) -> int:
+    """ID 목록 일괄 삭제. 삭제된 행 수 반환. 한 트랜잭션으로 처리."""
+    if not ids:
+        return 0
+    stmt = sa_delete(Customer).where(Customer.id.in_(ids))
+    result = db.execute(stmt)
+    db.commit()
+    return result.rowcount or 0
 
 
 def update(db: Session, customer_id: int, data: Dict[str, Any]) -> Optional[Customer]:

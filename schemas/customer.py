@@ -45,5 +45,15 @@ class CustomerListResponse(BaseModel):
 
 
 class CsvUploadResponse(BaseModel):
-    total: int
-    created: int
+    total: int       # CSV에서 읽은 총 행 수
+    created: int     # 신규 생성된 매장 수
+    updated: int     # 사업자번호 일치로 덮어쓴 매장 수
+    skipped: int     # 사업자번호가 비어 건너뛴 행 수
+
+
+class BulkDeleteIn(BaseModel):
+    ids: list[int]
+
+
+class BulkDeleteResponse(BaseModel):
+    deleted: int     # 실제 삭제된 매장 수

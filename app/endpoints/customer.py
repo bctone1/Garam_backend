@@ -10,7 +10,15 @@ from sqlalchemy.orm import Session
 
 from database.session import get_db
 from crud import customer as crud
-from schemas.customer import CustomerResponse, CustomerCreate, CustomerUpdate, CsvUploadResponse, CustomerListResponse
+from schemas.customer import (
+    CustomerResponse,
+    CustomerCreate,
+    CustomerUpdate,
+    CsvUploadResponse,
+    CustomerListResponse,
+    BulkDeleteIn,
+    BulkDeleteResponse,
+)
 
 router = APIRouter(prefix="/customer", tags=["Customer"])
 
@@ -51,8 +59,8 @@ def upload_csv(
             continue
         rows.append(mapped)
 
-    created = crud.bulk_create_from_csv(db, rows)
-    return {"total": len(rows), "created": len(created)}
+    result = crud.bulk_upsert_from_csv(db, rows)
+    return {"total": len(rows), **result}
 
 
 @router.get("/", response_model=CustomerListResponse)
@@ -78,6 +86,12 @@ def search_customers(
     total = crud.count_by_keyword(db, q)
     items = crud.search_by_keyword(db, q, offset=offset, limit=limit)
     return {"total": total, "items": items}
+
+
+@router.post("/bulk_delete", response_model=BulkDeleteResponse)
+def bulk_delete_customers(payload: BulkDeleteIn, db: Session = Depends(get_db)):
+    deleted = crud.delete_many(db, payload.ids)
+    return {"deleted": deleted}
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)

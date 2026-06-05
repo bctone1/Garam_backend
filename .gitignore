@@ -11,3 +11,4 @@ pycache/
 .omc
 .playwright-mcp
 /config
+.venv
