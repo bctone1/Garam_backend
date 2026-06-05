@@ -6,7 +6,9 @@ myenv/
 /temp
 
 pycache/
+__pycache__/
 *pyc
+*.pyc
 .claude
 .omc
 .playwright-mcp
