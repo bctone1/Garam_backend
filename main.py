@@ -1,13 +1,14 @@
 import os, logging, uvicorn
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.routers import register_routers
 from core.config import UPLOAD_FOLDER
 from core.scheduler import init_scheduler  # APScheduler 초기화
+from core.firebase import init_firebase
 
 load_dotenv()
 log = logging.getLogger("uvicorn")
@@ -15,6 +16,7 @@ log = logging.getLogger("uvicorn")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
+    init_firebase()  # 실패해도 서버는 기동 (푸시만 비활성)
     sched = init_scheduler()
     sched.start()
     app.state.scheduler = sched
@@ -27,6 +29,46 @@ async def lifespan(app: FastAPI):
         log.info("APScheduler stopped")
 
 app = FastAPI(debug=True, lifespan=lifespan)
+
+from typing import List
+from fastapi import WebSocket
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for ws in self.active_connections:
+            await ws.send_text(message)
+
+
+ws_manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    print("🟢 WebSocket connected:", len(ws_manager.active_connections))
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(f"받은 메시지: {data}")
+
+            # 🔥 모든 클라이언트에게 전송
+            await ws_manager.broadcast(f"알림: {data}")
+
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+        print("🔴 WebSocket disconnected:", len(ws_manager.active_connections))
+
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.mount("/file", StaticFiles(directory=UPLOAD_FOLDER), name="file")
